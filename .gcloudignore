@@ -1,0 +1,17 @@
+# .gcloudignore - files NOT uploaded when you run "gcloud run deploy --source ."
+# (Smaller upload = faster deploys. Same idea as .gitignore.)
+.venv/
+# ^ your local Python environment (hundreds of MB, and Windows-only anyway)
+.buildozer/
+bin/
+# ^ Android build output
+**/__pycache__/
+# ^ Python's compiled cache files
+server/data/
+# ^ the local catalogue database - the cloud server creates its own on start
+tests/
+tools/
+assets/icons/
+assets/ui/
+# ^ only needed by the phone app / developers, not by the server
+.git/

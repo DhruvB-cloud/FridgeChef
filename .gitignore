@@ -1,0 +1,12 @@
+# .gitignore - files that should NOT be uploaded to GitHub
+.venv/
+# ^ local Python environment - everyone creates their own with "pip install -r requirements.txt"
+__pycache__/
+# ^ Python's compiled cache files
+.buildozer/
+bin/
+# ^ Android build output (the APK itself is shared separately, not in the repository)
+server/data/
+# ^ the server's database is re-created automatically on start
+*.log
+# ^ log files (e.g. the local server log)

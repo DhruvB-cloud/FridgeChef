@@ -1,0 +1,9 @@
+# .gitattributes - tells Git how to treat files.
+# Store and check out every text file with Linux-style line endings (LF). The server is built on
+# Linux (Google Cloud) and the APK is built on Linux (GitHub Actions), where Windows-style (CRLF)
+# endings can break scripts. Python and VS Code on Windows handle LF perfectly well.
+* text=auto eol=lf
+
+# Pictures are binary files: never change a single byte of them.
+*.png binary
+*.jpg binary

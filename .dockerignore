@@ -1,0 +1,9 @@
+# .dockerignore - files Docker should ignore when building the container (mirrors .gcloudignore)
+.venv
+.buildozer
+bin
+**/__pycache__
+server/data
+tests
+tools
+.git

@@ -1,0 +1,7 @@
+# Python packages for running FridgeChef on a computer (install with: pip install -r requirements.txt)
+# NOTE: Kivy 2.3.1 supports Python 3.8 - 3.13. Use Python 3.13 (not 3.14) for the virtual environment.
+
+kivy==2.3.1      # the cross-platform UI framework (windows, buttons, screens) - also runs on Android
+pillow>=10.1     # image library: resizes recipe photos, draws share cards and default pictures
+plyer>=2.1       # one Python API for phone features: notifications and the Android photo picker
+flask>=3.0       # the web framework for the recipe API server (server/app.py) - NOT needed on the phone
