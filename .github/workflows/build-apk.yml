@@ -52,8 +52,9 @@ jobs:                                         # a workflow is made of "jobs"; we
       - name: Install Linux build tools       # 4. compilers & libraries Buildozer needs (list from its docs)
         run: |                                #    "|" = the lines below are one shell script
           sudo apt-get update                 #    refresh Ubuntu's list of available packages
-          sudo apt-get install -y git zip unzip autoconf automake autopoint gettext libtool pkg-config zlib1g-dev libncurses-dev libtinfo6 cmake libffi-dev libssl-dev
-          # ^ -y = answer "yes" automatically; these build Python, OpenSSL, SQLite etc. for Android
+          sudo apt-get install -y git zip unzip autoconf automake autopoint gettext libtool pkg-config zlib1g-dev libncurses-dev libtinfo6 cmake libffi-dev libssl-dev libltdl-dev
+          # ^ -y = answer "yes" automatically; these build Python, OpenSSL, SQLite etc. for Android.
+          #   libltdl-dev: needed to build libffi (without it: "undefined macro: LT_SYS_SYMBOL_USCORE")
 
       - name: Install Buildozer               # 5. the tool that turns our project into an APK
         run: pip install buildozer setuptools cython==0.29.34   # versions from Buildozer's docs
