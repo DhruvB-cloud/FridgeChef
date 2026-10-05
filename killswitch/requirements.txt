@@ -1,0 +1,3 @@
+# Libraries the kill-switch function needs (versions from Google's official guide).
+functions-framework==3.*       # runs our function when a Pub/Sub message arrives
+google-cloud-billing==1.16.2   # talks to the Cloud Billing API (check / disable billing)

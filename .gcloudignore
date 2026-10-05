@@ -15,3 +15,5 @@ assets/icons/
 assets/ui/
 # ^ only needed by the phone app / developers, not by the server
 .git/
+killswitch/
+# ^ the billing kill switch is deployed separately (gcloud functions deploy --source killswitch)

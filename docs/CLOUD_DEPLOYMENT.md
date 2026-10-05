@@ -201,3 +201,37 @@ At the scale of you and your friends, the expected bill is **₹0**. The budget 
 | `server/app.py` | The API itself (same file you run locally) |
 | `.gcloudignore` / `.dockerignore` | Files NOT uploaded/copied (your `.venv`, tests, Android build output...) |
 | `app/config.py` | `CLOUD_SERVER` - the address the app uses once you've deployed |
+
+---
+
+## 10. The billing kill switch (set up)
+
+The ₹50 budget only sends emails. The **kill switch** stops spending automatically: the budget posts its status to a Pub/Sub topic (a mailbox for programs) several times a day, and a small function (`killswitch/main.py`) **removes billing from `fridgechef-56971`** as soon as this month's cost is over the budget. The server goes offline, and the app keeps working with its offline recipes.
+
+**How it was set up** (already done; listed here so you can see and repeat each step):
+
+```powershell
+gcloud services enable pubsub.googleapis.com cloudfunctions.googleapis.com eventarc.googleapis.com cloudbilling.googleapis.com   # the services it uses
+gcloud pubsub topics create billing-alerts                                   # the mailbox
+gcloud iam service-accounts create billing-killswitch --display-name "Billing kill switch"   # a robot account used ONLY by the kill switch
+$sa = "billing-killswitch@fridgechef-56971.iam.gserviceaccount.com"          # its e-mail-style name
+gcloud billing accounts add-iam-policy-binding 0186B2-561432-FDA3ED --member "serviceAccount:$sa" --role roles/billing.admin   # may change billing (Google's guide)
+gcloud projects add-iam-policy-binding fridgechef-56971 --member "serviceAccount:$sa" --role roles/billing.projectManager   # may unlink billing from THIS project
+gcloud projects add-iam-policy-binding fridgechef-56971 --member "serviceAccount:$sa" --role roles/browser                 # may SEE the project (to check its billing)
+gcloud projects add-iam-policy-binding fridgechef-56971 --member "serviceAccount:$sa" --role roles/run.invoker             # may receive the mailbox messages
+gcloud projects add-iam-policy-binding fridgechef-56971 --member "serviceAccount:$sa" --role roles/eventarc.eventReceiver  # (same, for the trigger)
+gcloud billing budgets update <budget-id> --billing-account 0186B2-561432-FDA3ED --notifications-rule-pubsub-topic projects/fridgechef-56971/topics/billing-alerts   # budget -> mailbox
+```
+
+The function is deployed with `gcloud functions deploy stop-billing --gen2 --runtime python312 --region asia-south1 --source killswitch --entry-point stop_billing --trigger-topic billing-alerts --service-account $sa --trigger-service-account $sa --set-env-vars SIMULATE=false,TARGET_PROJECT_ID=fridgechef-56971 --max-instances 1 --memory 256Mi`.
+- **Test mode:** `SIMULATE=true` makes it only write "SIMULATION: would disable billing" in its log. It was tested that way first.
+- **Testing in real mode:** only send **under-budget** messages. An over-budget test would really switch the server off.
+
+**If it ever fires:**
+```powershell
+gcloud functions logs read stop-billing --region asia-south1 --limit 20             # 1. see what happened (cost vs budget)
+# 2. open https://console.cloud.google.com/billing -> Reports to see WHAT cost the money
+gcloud billing projects link fridgechef-56971 --billing-account 0186B2-561432-FDA3ED   # 3. switch billing back on
+gcloud run services describe fridgechef-api --region asia-south1 --format "value(status.url)"   # 4. the server comes back on its own (check it)
+```
+**Limitation:** Google updates cost data with a delay of up to several hours, so the spend can go somewhat over ₹50 before the switch fires. It turns an *unlimited* risk into a *small* one.
