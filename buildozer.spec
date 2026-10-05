@@ -45,8 +45,10 @@ fullscreen = 0
 #   WRITE_EXTERNAL_STORAGE - save the share card to the gallery on Android 9 and older only
 android.permissions = INTERNET, POST_NOTIFICATIONS, READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, (name=android.permission.WRITE_EXTERNAL_STORAGE;maxSdkVersion=28)
 # Target a recent Android version (required by the Play Store) and support Android 7.0+.
-android.api = 34
+# api 36 + ndk 29 are the values Buildozer's docs require for python-for-android "develop".
+android.api = 36
 android.minapi = 24
+android.ndk = 29
 # CPU type to build for. arm64-v8a = 64-bit ARM, used by practically every phone from ~2017 on.
 # (Add ", armeabi-v7a" for very old 32-bit phones - the build then takes about twice as long.)
 android.archs = arm64-v8a
@@ -54,6 +56,11 @@ android.archs = arm64-v8a
 android.allow_backup = True
 # Accept the Android SDK licence automatically - the build runs unattended on GitHub's computers.
 android.accept_sdk_license = True
+# A release build makes an .apk (installable file) instead of the default .aab (Play Store only).
+android.release_artifact = apk
+# Use python-for-android's "develop" branch: it fixes installing libraries that now ship their own
+# Android packages (e.g. charset-normalizer 3.5+), and it is the branch required for the Play Store.
+p4a.branch = develop
 
 [buildozer]
 # 2 = show detailed build logs (useful when something goes wrong).
