@@ -70,13 +70,11 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 
 ---
 
-## 3b. (Optional) Test the server container on your PC with Docker
+## 3b. (Optional, skipped for this project) Test the server container locally with Docker
 
-Docker Desktop is installed on this PC. With it you can build and run **exactly the container Cloud Run will run** before uploading anything. This is the best way to catch problems early.
+**You don't need this section.** Google's servers build the container during `gcloud run deploy`, so Docker isn't required on your PC. We tried Docker Desktop, but on this laptop its Linux engine reported "no virtualization available", and for a project this small it wasn't worth the 2 GB of disk and RAM, so it was uninstalled. The commands below are kept for later, in case you want to try local container testing on a PC where Docker works.
 
-Before the first use:
-1. **Restart Windows** once after installing Docker/WSL2.
-2. Start **Docker Desktop** from the Start menu and accept its terms. The whale icon in the taskbar turns steady when it's ready.
+With Docker you can build and run **exactly the container Cloud Run will run** before uploading anything:
 
 ```powershell
 cd F:\Projects\FridgeChef                                  # the folder that contains the Dockerfile

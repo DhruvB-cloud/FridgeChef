@@ -197,9 +197,9 @@ class ProfileScreen(Screen):
         server = Card(spacing=dp(10))
         server.add_widget(WrapLabel(text="[b]Recipe server[/b]", font_size=sp(14)))
         server.add_widget(WrapLabel(
-            text="The Recipes tab asks this server for recipes. On a phone, use your computer's "
-                 "Wi-Fi address, e.g. http://192.168.1.20:5000. Without a connection the app uses "
-                 "the recipes saved on this device.", color=MUTED, font_size=sp(13)))
+            text="The Recipes tab asks this server for recipes. Normally leave it on the default "
+                 "(the FridgeChef cloud server). Without a connection the app uses the recipes "
+                 "saved on this device.", color=MUTED, font_size=sp(13)))
         use = SoftToggle("Use online recipes", state="down" if db.get_setting("use_server", "1") == "1" else "normal")
         use.bind(state=lambda btn, state: db.set_setting("use_server", "1" if state == "down" else "0"))
         server.add_widget(use)
@@ -207,8 +207,12 @@ class ProfileScreen(Screen):
         url_in.bind(text=lambda inp, text: db.set_setting("server_url", text.strip()))
         server.add_widget(url_in)
         self.server_status = WrapLabel(text="", font_size=sp(13), color=MUTED)
-        server.add_widget(SoftButton("Test connection", bg=NEUTRAL, fg=INK,
-                                     on_release=lambda *_: self._test_server(url_in.text.strip())))
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))            # two buttons side by side
+        buttons.add_widget(SoftButton("Use default server", bg=NEUTRAL, fg=INK,         # forget a typed address...
+                                      on_release=lambda *_: setattr(url_in, "text", DEFAULT_SERVER)))   # ...and use config.py's (the bind above saves it)
+        buttons.add_widget(SoftButton("Test connection", bg=NEUTRAL, fg=INK,
+                                      on_release=lambda *_: self._test_server(url_in.text.strip())))
+        server.add_widget(buttons)
         server.add_widget(self.server_status)
         c.add_widget(server)
 

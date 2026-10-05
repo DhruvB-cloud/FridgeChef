@@ -15,7 +15,7 @@ WHY THIS FILE EXISTS:
 
 LOCAL_SERVER = "http://127.0.0.1:5000"     # the Flask server running on this same computer
 
-CLOUD_SERVER = ""                          # e.g. "https://fridgechef-api-abc123-el.a.run.app" after deploying
+CLOUD_SERVER = "https://fridgechef-api-847387196162.asia-south1.run.app"   # Google Cloud Run (project fridgechef-56971, Mumbai) - set "" to go back to the local server
 
 DEFAULT_SERVER = CLOUD_SERVER or LOCAL_SERVER   # 'or' picks CLOUD_SERVER when it's filled in, else the local one
 
