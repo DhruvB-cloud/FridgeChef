@@ -50,6 +50,15 @@ To run the server yourself instead (e.g. to watch its output), start it in a sep
 
 ## 2. Using it on your phone
 
+**The easy way: let GitHub build the APK.** Every push that changes the app (`main.py`, `app/`, `assets/`, `buildozer.spec`) runs [.github/workflows/build-apk.yml](.github/workflows/build-apk.yml) on GitHub's free Linux computers. To get the APK:
+1. Open the repository on GitHub → **Actions** tab → the newest **Build Android APK** run.
+2. When it shows a green tick, scroll down to **Artifacts** → download **FridgeChef-apk** (a zip with the `.apk` inside).
+3. To publish a public download page for friends, push a version tag: `git tag v4.0.0` then `git push origin v4.0.0`. The APK is then attached to a **Release**.
+
+The app talks to the recipe server on Google Cloud Run (`CLOUD_SERVER` in `app/config.py`), over HTTPS, so it works on any phone with internet. Without internet it uses the recipes saved on the phone.
+
+**Building on your own Linux/WSL machine instead:**
+
 > **Sharing the app (GitHub, app store, APK for friends)?** Put the server in the cloud first. Follow **[docs/CLOUD_DEPLOYMENT.md](docs/CLOUD_DEPLOYMENT.md)** (Google Cloud Run, free for an app this size), then paste the URL into `CLOUD_SERVER` in `app/config.py` and rebuild the APK. The steps below are only for testing on your own phone with your PC as the server.
 
 1. Build the APK (Linux or WSL only):

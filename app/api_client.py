@@ -20,9 +20,27 @@ ENDPOINTS USED (see server/app.py for the other side):
 
 import json                          # encode/decode the request and response bodies
 import os
+import ssl                           # HTTPS: checks the server's certificate
 import threading                     # run the request without freezing the UI
 import urllib.error
 import urllib.request                # Python's built-in HTTP client
+
+
+def _make_ssl_context():
+    """The rules for HTTPS connections, with a list of trusted certificate authorities.
+
+    On Windows/macOS Python finds that list in the operating system. Python on ANDROID can't, so
+    https:// requests would fail with CERTIFICATE_VERIFY_FAILED. The small `certifi` package ships
+    the same list Mozilla Firefox uses, so we use it whenever it's installed.
+    """
+    try:
+        import certifi                                     # bundled into the APK via buildozer.spec
+        return ssl.create_default_context(cafile=certifi.where())   # trust certifi's list
+    except ImportError:                                    # certifi missing (e.g. a minimal PC setup)
+        return ssl.create_default_context()                # fall back to the system's list
+
+
+SSL_CONTEXT = _make_ssl_context()    # created once, reused for every request
 
 from app.api_schema import API_VERSION, match_from_dict, pantry_to_dict
 from app.config import DEFAULT_SERVER, REQUEST_TIMEOUT_SECONDS   # server address lives in config.py
@@ -48,7 +66,7 @@ class RecipeApiClient:
             self.base_url + path, data=data, method=method,
             headers={"Content-Type": "application/json", "Accept": "application/json"})
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout, context=SSL_CONTEXT) as response:
                 return json.loads(response.read().decode("utf-8"))   # bytes -> text -> dict
         except urllib.error.HTTPError as error:            # server answered with 4xx / 5xx
             raise ApiError(f"Server error {error.code}") from error
@@ -83,7 +101,7 @@ class RecipeApiClient:
             return None
         target = os.path.join(folder, os.path.basename(file_name))   # basename: no '../' tricks
         try:
-            with urllib.request.urlopen(f"{self.base_url}/images/{file_name}",
+            with urllib.request.urlopen(f"{self.base_url}/images/{file_name}", context=SSL_CONTEXT,
                                         timeout=self.timeout) as response:
                 with open(target, "wb") as out:
                     out.write(response.read())

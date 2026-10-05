@@ -161,6 +161,23 @@ def make_ui_shapes():
     print("ui shapes ->", ui_dir)
 
 
+def make_app_icon(out_path, size=512):
+    """The launcher icon on the phone's home screen: a sage-green rounded square with a pot of food."""
+    s = 4                                                   # draw 4x bigger, then shrink = smooth edges
+    big = Image.new("RGBA", (size * s, size * s), (0, 0, 0, 0))
+    bg = gradient((size * s, size * s), (150, 200, 158), (95, 160, 108)).convert("RGBA")   # light -> darker sage
+    mask = Image.new("L", bg.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, bg.width - 1, bg.height - 1], radius=size * s // 5, fill=255)
+    big.paste(bg, (0, 0), mask)                             # rounded green square
+    plate = int(size * s * 0.66)                            # white plate in the middle
+    off = (size * s - plate) // 2
+    ImageDraw.Draw(big).ellipse([off, off, off + plate, off + plate], fill=(255, 255, 255, 255))
+    icon = big.resize((size, size), Image.LANCZOS)
+    pot = emoji_image("\U0001F372", int(size * 0.46))       # the pot-of-food emoji on the plate
+    icon.alpha_composite(pot, ((size - pot.width) // 2, (size - pot.height) // 2))
+    icon.save(out_path, "PNG")
+
+
 def make_icon(char, out_path, size=128):
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     glyph = emoji_image(char, int(size * 0.86))
@@ -178,3 +195,5 @@ if __name__ == "__main__":
         make_icon(char, os.path.join(ICONS_DIR, f"{name}.png"))
         print("icon:", name)
     make_ui_shapes()
+    make_app_icon(os.path.join(os.path.dirname(ICONS_DIR), "app_icon.png"))   # assets/app_icon.png
+    print("app icon -> assets/app_icon.png")

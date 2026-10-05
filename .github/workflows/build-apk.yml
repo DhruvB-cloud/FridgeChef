@@ -1,0 +1,88 @@
+# .github/workflows/build-apk.yml
+# -------------------------------
+# WHY THIS FILE EXISTS:
+#   Android apps made with Kivy are built by "Buildozer", which only runs on Linux. Instead of
+#   setting up Linux on your laptop, this file asks GitHub to build the APK on one of ITS free
+#   Linux computers ("runners") - automatically, every time the app's code changes.
+#   GitHub Actions reads every .yml file in .github/workflows/ and follows the steps inside.
+#
+# WHERE TO FIND THE APK:
+#   GitHub -> your repository -> "Actions" tab -> the latest "Build Android APK" run ->
+#   "Artifacts" section at the bottom -> FridgeChef-apk (a zip containing the .apk).
+#   For a public download link (e.g. for friends), create a tag like v4.0.0 - see the last step.
+
+name: Build Android APK                       # the name shown in the Actions tab
+
+on:                                           # WHEN should this workflow run?
+  push:                                       # 1) when commits are pushed...
+    branches: [main]                          #    ...to the main branch,
+    paths:                                    #    but only if something the APP uses changed
+      - "main.py"                             #    (a change to server/ or docs/ alone does not
+      - "app/**"                              #     need a new APK - "**" means "anything inside")
+      - "assets/**"
+      - "buildozer.spec"
+      - ".github/workflows/build-apk.yml"     #    ...or this recipe itself changed
+    tags: ["v*"]                              # 2) when a version tag like v4.0.0 is pushed (-> public release)
+  workflow_dispatch:                          # 3) by hand: Actions tab -> "Run workflow" button
+
+permissions:                                  # what this workflow may do with your repository
+  contents: write                             # needed only to publish a Release (the last step)
+
+jobs:                                         # a workflow is made of "jobs"; we need just one
+  build:                                      # the job's id
+    name: Build debug APK                     # the job's display name
+    runs-on: ubuntu-24.04                     # GitHub's Linux computer: Ubuntu 24.04 (Buildozer's documented setup)
+    timeout-minutes: 120                      # give up after 2 hours (the very first build is the slowest)
+
+    steps:                                    # the steps run one after another, top to bottom
+      - name: Get the code                    # 1. copy your repository onto the runner
+        uses: actions/checkout@v7             #    a ready-made step published by GitHub
+
+      - name: Set up Python 3.12              # 2. the Python that runs Buildozer itself
+        uses: actions/setup-python@v7         #    (Buildozer's stable branch supports Python up to 3.12)
+        with:
+          python-version: "3.12"
+
+      - name: Set up Java 17                  # 3. Android's build tools are written in Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin               #    a free, widely used Java build
+          java-version: "17"                  #    the version Buildozer's documentation asks for
+
+      - name: Install Linux build tools       # 4. compilers & libraries Buildozer needs (list from its docs)
+        run: |                                #    "|" = the lines below are one shell script
+          sudo apt-get update                 #    refresh Ubuntu's list of available packages
+          sudo apt-get install -y git zip unzip autoconf automake autopoint gettext libtool pkg-config zlib1g-dev libncurses-dev libtinfo6 cmake libffi-dev libssl-dev
+          # ^ -y = answer "yes" automatically; these build Python, OpenSSL, SQLite etc. for Android
+
+      - name: Install Buildozer               # 5. the tool that turns our project into an APK
+        run: pip install buildozer setuptools cython==0.29.34   # versions from Buildozer's docs
+
+      - name: Reuse downloads from earlier builds   # 6. the Android SDK/NDK are ~3 GB to download;
+        uses: actions/cache@v6                       #    keeping them between runs makes later builds much faster
+        with:
+          path: |                             #    the folders to keep:
+            ~/.buildozer
+            .buildozer
+          # ^ ~/.buildozer = Android SDK/NDK; .buildozer = previously compiled parts of the app
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          # ^ the cache's name: changes when buildozer.spec changes -> then everything is rebuilt fresh
+          restore-keys: buildozer-${{ runner.os }}-   # otherwise reuse the newest older cache if there is one
+
+      - name: Build the APK                   # 7. the main event (first time: ~30-60 minutes)
+        run: buildozer -v android debug       #    -v = detailed log; "debug" = an installable test build
+        # (Licences are accepted by "android.accept_sdk_license = True" in buildozer.spec.)
+
+      - name: Upload the APK                  # 8. keep the result so you can download it
+        uses: actions/upload-artifact@v7
+        with:
+          name: FridgeChef-apk                #    the download's name in the Actions tab
+          path: bin/*.apk                     #    Buildozer puts the finished APK in the bin/ folder
+          retention-days: 30                  #    GitHub deletes the download after 30 days
+
+      - name: Publish a Release (version tags only)   # 9. a public download page for friends
+        if: startsWith(github.ref, 'refs/tags/v')      #    runs ONLY when the push was a tag like v4.0.0
+        uses: softprops/action-gh-release@v3
+        with:
+          files: bin/*.apk                    #    attach the APK to the release
+          generate_release_notes: true        #    list the commits since the previous release
