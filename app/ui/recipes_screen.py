@@ -30,7 +30,7 @@ from app.expiry import expiring_today
 from app.meal_time import current_meal
 from app.models import CUISINES, NUTRITION_TAGS, SORT_OPTIONS
 from app.recipe_engine import filter_matches, match_all, recommend, sort_matches
-from app.ui.widgets import (AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
+from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
                             PRIMARY_SOFT, Card, Chip, Header, RecipeCard, RecipeTile, SoftInput,
                             SoftSpinner, SoftToggle, WrapLabel, bg_rect, colored, labeled,
                             scroll_list, section_title)
@@ -221,6 +221,13 @@ class RecipesScreen(Screen):
             self.wide = wide
             self._render()
 
+    @staticmethod
+    def _fingerprint(matches):
+        """A short summary of a result list: changes only when something VISIBLE changes."""
+        return tuple((m.recipe.uid, m.recipe.image_path, m.appliance_ok,
+                      tuple(i.name for i in m.missing), tuple(m.uses_expiring_today),
+                      tuple(m.uses_expiring_soon)) for m in matches)
+
     def _render(self):
         if self.state is None:
             return
@@ -228,6 +235,13 @@ class RecipesScreen(Screen):
         people = "1 person" if s["servings"] == 1 else f"{s['servings']} people"
         source = "live from server" if s["online"] else "offline - saved on this phone"
         self.header.set_subtitle(f"For {people} • {source}")
+        # Version 4.0.1: rebuilding ~30 cards while you scroll interrupted the swipe and jumped back
+        # to the top. If the new answer looks exactly like what is on screen, keep the screen as it is.
+        shown = (self.wide, s["meal"], self._fingerprint(s["recommended"]), self._fingerprint(s["results"]))
+        if shown == getattr(self, "_shown", None):
+            return
+        self._shown = shown
+        old_scroll = [w.scroll_y for w in self.content.walk() if isinstance(w, ScrollView) and w.do_scroll_y]
         self.content.clear_widgets()
         open_recipe = self.app.open_recipe
         rec_title = f"Recommended for {s['meal']}"
@@ -260,7 +274,7 @@ class RecipesScreen(Screen):
         scroll, inner = scroll_list(padding=(0, dp(2), 0, dp(14)))
         inner.add_widget(section_title(rec_title))
         if s["recommended"]:
-            strip = ScrollView(do_scroll_y=False, size_hint_y=None, height=dp(232), bar_width=0)
+            strip = SideScroller(size_hint_y=None, height=dp(232))   # lets up/down swipes scroll the page
             row = BoxLayout(size_hint_x=None, spacing=dp(12), padding=(dp(2), dp(4), dp(2), dp(6)))
             row.bind(minimum_width=row.setter("width"))  # row grows sideways with its cards
             for m in s["recommended"]:
@@ -272,6 +286,8 @@ class RecipesScreen(Screen):
         inner.add_widget(section_title(all_title))
         self._fill_all(inner, s["results"])
         self.content.add_widget(scroll)
+        if old_scroll:                                   # stay where you were (don't jump to the top)
+            Clock.schedule_once(lambda dt: setattr(scroll, "scroll_y", old_scroll[0]), 0)
 
     def _fill_all(self, layout, results):
         if not results:

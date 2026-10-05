@@ -147,7 +147,7 @@ class ProfileScreen(Screen):
             entry = next(e for e in log if e["recipe_name"] == fav_name)   # newest entry of that dish
             fav = TapCard(orientation="horizontal", spacing=dp(12), padding=dp(10))
             holder = BoxLayout(size_hint=(None, None), size=(dp(76), dp(76)), pos_hint={"center_y": 0.5})
-            holder.add_widget(RoundImage(resolve_image(entry["image_path"]), radius=dp(16)))
+            holder.add_widget(RoundImage(resolve_image(entry["image_path"], small=True), radius=dp(16)))
             fav.add_widget(holder)
             text = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
             text.bind(minimum_height=text.setter("height"))
@@ -157,7 +157,7 @@ class ProfileScreen(Screen):
             fav.add_widget(text)
             fav.add_widget(centered(icon_image("star", dp(30))))
             if entry["recipe_exists"]:
-                fav.bind(on_release=lambda *_: self.app.open_recipe(entry["recipe_id"]))
+                fav.bind(on_press=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_press = no delay
             c.add_widget(fav)
         else:
             empty = Card(shadow=False)

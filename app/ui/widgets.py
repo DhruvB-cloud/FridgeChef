@@ -16,7 +16,9 @@ HOW THE ROUNDED CORNERS WORK:
 
 import os
 
-from kivy.core.image import Image as CoreImage          # loads a picture into a GPU texture
+from kivy.clock import Clock                            # run something on the next frame
+from kivy.loader import Loader                          # loads pictures on background threads
+from kivy.utils import platform                         # 'android', 'win', ... (keyboard fix below)
 from kivy.graphics import Color, Rectangle, RoundedRectangle   # low-level drawing instructions
 from kivy.metrics import dp, sp           # dp = density-independent pixels, sp = scaled font size
 from kivy.uix.behaviors import ButtonBehavior           # makes any widget clickable
@@ -294,6 +296,29 @@ class SoftInput(TextInput):
         else:
             self.padding = (dp(14), dp(12), dp(14), dp(12))
 
+    def on_touch_up(self, touch):
+        """A TAP on the box always opens the keyboard (bug fix for phones, version 4.0.1).
+
+        On Android a quick tap sometimes did not show the keyboard - you had to press and hold.
+        In Kivy the keyboard is only requested at the moment a box GAINS focus, so if the keyboard
+        got closed while the box kept its focus, tapping again did nothing. Here every short tap
+        (finger lifted close to where it went down) makes sure the box is focused AFTER all other
+        touch handling has finished; on Android an already-focused box quickly drops and regains
+        focus, which asks Android for the keyboard again.
+        """
+        handled = super().on_touch_up(touch)               # normal text-box behaviour first
+        moved = abs(touch.x - touch.ox) + abs(touch.y - touch.oy)   # how far the finger travelled
+        if self.collide_point(*touch.pos) and not self.disabled and moved < dp(12):   # a tap on us
+            Clock.schedule_once(self._open_keyboard, 0)   # 0 = on the next frame, after everything else
+        return handled
+
+    def _open_keyboard(self, *_):
+        if not self.focus:                                 # not focused (e.g. focus was taken away) -> take it
+            self.focus = True
+        elif platform == "android":                        # focused, but the keyboard may be hidden:
+            self.focus = False                             # dropping and regaining focus makes Android
+            self.focus = True                              # show the keyboard again
+
     def set_tint(self, color):
         """Use a fixed fill colour (or None to go back to grey / green-when-selected)."""
         self.tint = color
@@ -332,7 +357,39 @@ class Card(BoxLayout):
 
 
 class TapCard(ButtonBehavior, Card):
-    """A Card you can tap (ButtonBehavior adds on_press / on_release events)."""
+    """A Card you can tap (ButtonBehavior adds on_press / on_release events).
+
+    Tip: inside scrolling lists use on_press, not on_release. Kivy's ScrollView only passes on a
+    touch once it knows it is a tap (not a swipe) and then delays the "release" by 0.2 seconds,
+    so on_release made every card feel slow (fixed in version 4.0.1).
+    """
+
+
+class SideScroller(ScrollView):
+    """A sideways-scrolling strip that lets up/down swipes scroll the page around it.
+
+    Kivy's ScrollView keeps holding a vertical swipe that starts on a horizontal strip ("until the
+    timeout is done", says a comment in Kivy's own code), so the page looked stuck when your finger
+    happened to land on the Recommended strip. Here, as soon as a swipe is clearly more vertical
+    than horizontal, the strip lets go of it and the page scrolls instead (fixed in version 4.0.1).
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("do_scroll_y", False)         # this strip only moves sideways
+        kwargs.setdefault("bar_width", 0)               # no scroll bar
+        super().__init__(**kwargs)
+
+    def on_scroll_move(self, touch):
+        uid, avoid = self._get_uid(), self._get_uid("svavoid")
+        if avoid not in touch.ud and uid in touch.ud and touch.ud[uid]["mode"] == "unknown":
+            dx = abs(touch.x - touch.ox)                # how far the finger moved sideways...
+            dy = abs(touch.y - touch.oy)                # ...and up/down, since it went down
+            if dy > dp(8) and dy > dx:                  # clearly a vertical swipe:
+                touch.ud[avoid] = True                  #   tell Kivy this strip ignores the touch,
+                touch.ungrab(self)                      #   stop following it,
+                self._touch = None                      #   and cancel the pending "tap" timer
+                return False                            #   -> the page's ScrollView takes over
+        return super().on_scroll_move(touch)
 
 
 class RoundImage(Widget):
@@ -353,14 +410,27 @@ class RoundImage(Widget):
         self.set_source(source)
 
     def set_source(self, source):
-        """Load (or replace) the picture. A missing/broken file shows the placeholder colour."""
+        """Load (or replace) the picture IN THE BACKGROUND. Missing/broken file -> placeholder colour.
+
+        (Version 4.0.1: loading every picture directly froze the screen for a moment on phones,
+        e.g. when opening the Recipes tab with ~30 pictures. Kivy's Loader reads files on helper
+        threads and hands the finished picture over a few per frame, so scrolling stays smooth.)
+        """
         self._texture = None
+        self._source = source                              # remember which picture we want now
         if source and os.path.exists(source):
-            try:
-                self._texture = CoreImage(source).texture   # Kivy caches textures by file name
-            except Exception:                              # unreadable image -> placeholder
-                self._texture = None
+            proxy = Loader.image(source)                   # starts loading (or returns it from the cache)
+            if proxy.loaded:                               # already in memory -> show immediately
+                self._texture = proxy.texture
+            else:                                          # still loading -> show it when ready
+                proxy.bind(on_load=lambda p, s=source: self._loaded(p, s))
         self._update()
+
+    def _loaded(self, proxy, source):
+        """Called by the Loader when the picture is ready (only if it is still the one we want)."""
+        if source == self._source and proxy.texture is not None:
+            self._texture = proxy.texture
+            self._update()
 
     def _update(self, *_):
         self._rect.pos, self._rect.size = self.pos, self.size
@@ -534,7 +604,7 @@ class RecipeTile(TapCard):
     def __init__(self, match, on_open, **kwargs):
         super().__init__(orientation="horizontal", spacing=dp(12), padding=dp(10), **kwargs)
         recipe = match.recipe
-        picture = RoundImage(resolve_image(recipe.image_path), radius=dp(16),
+        picture = RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(16),
                              size_hint=(None, None), size=(dp(88), dp(88)))
         holder = BoxLayout(size_hint=(None, None), size=(dp(88), dp(88)),
                            pos_hint={"center_y": 0.5})               # vertically centred in the row
@@ -551,7 +621,7 @@ class RecipeTile(TapCard):
         for line in recipe_status_lines(match):
             text_col.add_widget(WrapLabel(text=line, font_size=sp(13)))
         self.add_widget(text_col)
-        self.bind(on_release=lambda *_: on_open(recipe.id))   # tap -> open the recipe
+        self.bind(on_press=lambda *_: on_open(recipe.id))     # tap -> open the recipe (on_press = no delay)
 
 
 class RecipeCard(TapCard):
@@ -563,7 +633,7 @@ class RecipeCard(TapCard):
             self.size_hint_x = None
             self.width = width
         recipe = match.recipe
-        self.add_widget(RoundImage(resolve_image(recipe.image_path), radius=dp(14),
+        self.add_widget(RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(14),
                                    size_hint_y=None, height=dp(112)))
         self.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(14),
                                   max_lines=2, shorten=True, shorten_from="right"))
@@ -574,4 +644,4 @@ class RecipeCard(TapCard):
         lines = recipe_status_lines(match)
         if lines:                                        # only the most important status line
             self.add_widget(WrapLabel(text=lines[0], font_size=sp(12), max_lines=2))
-        self.bind(on_release=lambda *_: on_open(recipe.id))
+        self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists

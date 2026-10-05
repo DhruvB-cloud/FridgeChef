@@ -49,7 +49,7 @@ from app.ui.pantry_screen import PantryScreen
 from app.ui.profile_screen import ProfileScreen
 from app.ui.recipe_detail_screen import RecipeDetailScreen
 from app.ui.recipes_screen import RecipesScreen
-from app.ui.widgets import BG, MUTED, PRIMARY_DARK, PRIMARY_SOFT, WHITE, bg_rect, icon_image, set_bg
+from app.ui.widgets import BG, MUTED, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, WHITE, bg_rect, icon_image, set_bg
 
 # The tabs of the bottom bar: (screen name, label, icon file in assets/icons).
 TABS = [("pantry", "Fridge", "tab_fridge"), ("recipes", "Recipes", "tab_recipes"),
@@ -72,11 +72,13 @@ class NavTab(ButtonBehavior, BoxLayout):
         self.add_widget(row)
         self.label = Label(text=label, font_size=sp(11), color=MUTED, size_hint_y=None, height=dp(16))
         self.add_widget(self.label)
-        self.bind(on_release=lambda *_: on_tap())
+        # on_press (finger DOWN), not on_release: the tab reacts the moment you touch it (4.0.1)
+        self.bind(on_press=lambda *_: on_tap())
 
     def set_active(self, active):
-        set_bg(self, PRIMARY_SOFT if active else (0, 0, 0, 0))
-        self.label.color = PRIMARY_DARK if active else MUTED
+        # Active tab = solid sage-green pill with white bold text (clearer than the old pale green).
+        set_bg(self, PRIMARY if active else (0, 0, 0, 0))
+        self.label.color = WHITE if active else MUTED
         self.label.bold = active
         self.icon.opacity = 1 if active else 0.6        # inactive icons look slightly faded
 
@@ -202,11 +204,20 @@ class FridgeChefApp(App):
         bg_rect(bar, WHITE, radius=dp(24), shadow=True)  # a floating white rounded bar
         self.nav_tabs = {}
         for name, label, icon_name in TABS:
-            tab = NavTab(label, icon_name, on_tap=lambda n=name: self.navigate(n, from_tab=True))
+            tab = NavTab(label, icon_name, on_tap=lambda n=name: self.tap_tab(n))
             self.nav_tabs[name] = tab
             bar.add_widget(tab)
         outer.add_widget(bar)
         return outer
+
+    def tap_tab(self, name):
+        """A tab was touched: highlight it IMMEDIATELY, then build the screen on the next frame.
+
+        (Before 4.0.1 the highlight was only drawn after the new screen had been built, which can
+        take a moment on a phone - so it looked like the tap had not registered.)
+        """
+        self._highlight_tab(name)                              # 1. instant visual feedback
+        Clock.schedule_once(lambda dt: self.navigate(name, from_tab=True), 0)   # 2. then the work
 
     def _highlight_tab(self, name):
         """Highlight the active tab."""
@@ -264,7 +275,8 @@ class FridgeChefApp(App):
         try:
             from android.permissions import Permission, request_permissions   # only exists on Android
             wanted = []
-            for perm in ("POST_NOTIFICATIONS", "READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE"):
+            # WRITE_EXTERNAL_STORAGE: saving the share card to the gallery on Android 7-9 (4.0.1)
+            for perm in ("POST_NOTIFICATIONS", "READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"):
                 if hasattr(Permission, perm):      # older python-for-android versions lack some
                     wanted.append(getattr(Permission, perm))
             request_permissions(wanted)

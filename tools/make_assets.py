@@ -188,8 +188,13 @@ def make_icon(char, out_path, size=128):
 if __name__ == "__main__":
     os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
+    os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
     for recipe in SEED_RECIPES:
-        make_recipe_image(recipe, os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg"))
+        full = os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")
+        make_recipe_image(recipe, full)
+        thumb = Image.open(full)                                  # a 256 px copy for list rows
+        thumb.thumbnail((256, 256), Image.LANCZOS)
+        thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{recipe.uid}.jpg"), "JPEG", quality=85)
         print("recipe image:", recipe.uid)
     for name, char in ICONS.items():
         make_icon(char, os.path.join(ICONS_DIR, f"{name}.png"))

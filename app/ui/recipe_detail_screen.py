@@ -19,6 +19,7 @@ from datetime import datetime                      # time stamp in share card fi
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.checkbox import CheckBox
+from kivy.uix.image import Image                    # shows the finished recipe card in the preview
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
@@ -33,7 +34,7 @@ from app.ui.widgets import (BLUE, BLUE_SOFT, DANGER, DANGER_SOFT, HEX_AMBER, HEX
                             NEUTRAL, PEACH_SOFT, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card,
                             Chip, ChipRow, Header, RoundImage, SoftButton, WrapLabel, colored,
                             confirm, diet_chip, escape, icon_image, recipe_status_lines,
-                            scroll_list, section_title, show_message)
+                            light_popup, scroll_list, section_title, show_message)
 
 
 def remove_old_cards(folder, keep=5):
@@ -249,9 +250,25 @@ class RecipeDetailScreen(Screen):
         except Exception as error:
             show_message("Could not create card", escape(str(error)))
             return
-        message = share_image(path, text=f"{self.recipe.name} - shared from FridgeChef")
-        if "saved to" in message:                          # desktop: tell the user where it is
-            show_message("Recipe card", escape(message))
+        self._show_card_preview(path)                      # 4.0.1: show the card first, then share
+
+    def _show_card_preview(self, path):
+        """Show the finished recipe card, with Share and Close buttons underneath."""
+        box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(6))
+        box.add_widget(Image(source=path, fit_mode="contain"))   # the card, as large as fits
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        popup = light_popup("Your recipe card", box, size_hint=(0.94, 0.88))
+
+        def share(*_):
+            ok, message = share_image(path, text=f"{self.recipe.name} - shared from FridgeChef")
+            if ok:
+                popup.dismiss()                            # the share sheet / viewer takes over
+            else:
+                show_message("Sharing did not work", escape(message), height=dp(340))   # the real reason
+        buttons.add_widget(SoftButton("Close", bg=NEUTRAL, fg=INK, on_release=lambda *_: popup.dismiss()))
+        buttons.add_widget(SoftButton("Share", bg=BLUE, fg=WHITE, on_release=share))
+        box.add_widget(buttons)
+        popup.open()
 
     def _start_cooking(self, match):
         if match.missing:                                  # warn but let the user decide

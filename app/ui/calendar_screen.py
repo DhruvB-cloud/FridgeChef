@@ -174,7 +174,7 @@ class CalendarScreen(Screen):
         card = TapCard(spacing=dp(10), padding=dp(10))
         row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(12))
         holder = BoxLayout(size_hint=(None, None), size=(dp(56), dp(56)))
-        holder.add_widget(RoundImage(resolve_image(entry["image_path"]), radius=dp(14)))   # recipe picture
+        holder.add_widget(RoundImage(resolve_image(entry["image_path"], small=True), radius=dp(14)))   # recipe picture
         row.add_widget(holder)
         text = BoxLayout(orientation="vertical", spacing=dp(2))
         time_text = datetime.fromisoformat(entry["cooked_on"]).strftime("%H:%M")
@@ -194,5 +194,5 @@ class CalendarScreen(Screen):
         if photo:                                        # your photo, big, under the dish name
             card.add_widget(RoundImage(photo, radius=dp(16), size_hint_y=None, height=dp(190)))
         if entry["recipe_exists"]:                       # recipe not deleted -> open it on tap
-            card.bind(on_release=lambda *_: self.app.open_recipe(entry["recipe_id"]))
+            card.bind(on_press=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_press = no delay
         return card

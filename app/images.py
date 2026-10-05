@@ -53,12 +53,21 @@ def icon(name):
     return os.path.join(ICONS_DIR, f"{name}.png")
 
 
-def resolve_image(image_path):
-    """Return a file path that exists for the stored image value, or None."""
+THUMBS_DIR = os.path.join(RECIPE_IMAGES_DIR, "thumbs")     # 256 px copies for lists (made by tools/make_assets.py)
+
+
+def resolve_image(image_path, small=False):
+    """Return a file path that exists for the stored image value, or None.
+
+    small=True prefers the 256 px thumbnail of a built-in picture: lists show pictures at about
+    90 x 90, so loading the 800 x 800 original there only wastes time and memory (version 4.0.1).
+    """
     if not image_path:
         return None
     if image_path.startswith("asset:"):                       # built-in / server picture
         name = image_path[len("asset:"):]
+        if small and os.path.exists(os.path.join(THUMBS_DIR, name)):
+            return os.path.join(THUMBS_DIR, name)               # the small copy
         for folder in (RECIPE_IMAGES_DIR, _cache_dir):          # bundled first, then downloaded
             if folder and os.path.exists(os.path.join(folder, name)):
                 return os.path.join(folder, name)

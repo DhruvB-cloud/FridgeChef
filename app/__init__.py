@@ -3,4 +3,4 @@
 # It is intentionally (almost) empty: all real code lives in the sibling modules.
 
 # A human-readable version string that the UI shows in the Kitchen screen footer.
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.0.1"
