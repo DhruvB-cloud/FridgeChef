@@ -57,6 +57,11 @@ CONTAINER_ART = {
     "jar": {"size": (300, 256), "label": (54, 108, 250, 206)},
     "bottle": {"size": (200, 300), "label": (30, 150, 170, 250)},
     "dish": {"size": (300, 256), "label": (62, 144, 238, 214)},
+    "carton": {"size": (200, 300), "label": (34, 150, 166, 250)},     # version 4.4: five more containers
+    "can": {"size": (220, 256), "label": (30, 92, 190, 180)},
+    "tub": {"size": (300, 230), "label": (72, 92, 228, 176)},
+    "box": {"size": (300, 220), "label": (64, 88, 236, 142)},
+    "basket": {"size": (300, 240), "label": (70, 136, 230, 200)},
 }
 
 

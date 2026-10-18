@@ -27,8 +27,8 @@ from datetime import date, timedelta              # expiry dates
 
 from kivy.animation import Animation              # the "disappearing from the fridge" effect
 from kivy.core.text import Label as CoreLabel     # measures text without showing it (font fitting)
-from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Rectangle, RoundedRectangle,
-                           Scale, Translate, Triangle)   # low-level drawing: shelves, rail, handle
+from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Quad, Rectangle, RoundedRectangle,
+                           Scale, Translate, Triangle)   # low-level drawing: shelves, door bin, handle
 from kivy.metrics import dp, sp
 from kivy.properties import NumericProperty       # values Animation can change smoothly
 from kivy.uix.behaviors import ButtonBehavior     # makes an item tappable
@@ -45,7 +45,7 @@ from app.dates import format_date                 # shows dates as dd-mm-yyyy
 from app.expiry import expiring_soon, expiring_today
 from app.images import CONTAINER_ART, icon        # picture sizes + label positions, icon paths
 from app.ingredient_catalog import food_type      # "nonveg" / "egg" / "veg"
-from app.models import CONTAINER_LABELS, CONTAINERS, PantryItem
+from app.models import CONTAINER_LABELS, CONTAINER_PLACE, CONTAINERS, PantryItem
 from app.units import UNIT_CHOICES
 from app.ui.autocomplete import AutoCompleteInput
 from app.ui.date_picker import DatePicker         # Day / Month / Year drop-downs
@@ -53,6 +53,7 @@ from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
 from app.ui.widgets import (EGG_FILL, NONVEG_FILL, VEG_FILL,
                             DANGER, DANGER_SOFT, HEX_RED, INK, INPUT_BG, MUTED, NEUTRAL,
                             SELECTED_FILL, WHITE, Card, Header, Scene, SoftButton, SoftDropDown,
+                            gradient_texture,
                             SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, labeled,
                             light_popup, primary_action, scroll_list, set_bg, show_message)
 
@@ -67,7 +68,9 @@ FOOD_STYLES = {
 # The fridge's colours are the "fridge" scene in widgets.SCENES (shared look of all tabs).
 SHELF = (1, 1, 1, 0.95)                           # white glass shelves and the door rail
 
-MAX_ART_WIDTH = {"jar": dp(104), "dish": dp(104), "bottle": dp(84)}   # pictures never get bigger than this
+MAX_ART_WIDTH = {"jar": dp(104), "dish": dp(104), "bottle": dp(84), "carton": dp(80), "can": dp(84),
+                 "tub": dp(104), "box": dp(108), "basket": dp(108)}   # pictures never get bigger than this
+SHELF_BASE = dp(12)                               # items stand this high above the bottom of a shelf row
 EMPTY_SHELF_HEIGHT = dp(30)                       # an empty shelf is just a low gap with a line
 
 
@@ -176,59 +179,77 @@ class ItemTile(ButtonBehavior, Widget):
 
 
 class ShelfRow(GridLayout):
-    """A row of up to `cols` items standing on a shelf line."""
+    """A row of up to `cols` items standing on a 3D glass shelf (version 4.4).
+
+    The shelf is drawn in layers: a soft shadow on the fridge wall below it, the see-through glass
+    top (narrower at the back = perspective), a bright frosted front edge, and two small support
+    pegs at the ends.
+    """
 
     def __init__(self, tiles, cols, height, **kwargs):
-        super().__init__(cols=cols, spacing=dp(6), padding=(0, 0, 0, dp(8)), size_hint_y=None,
-                         height=height + dp(8), **kwargs)   # dp(8) at the bottom = room for the shelf
+        super().__init__(cols=cols, spacing=dp(6), padding=(0, 0, 0, SHELF_BASE), size_hint_y=None,
+                         height=height + SHELF_BASE, **kwargs)
         self.has_items = bool(tiles)                     # False = an empty shelf
         for tile in tiles:
             self.add_widget(tile)
         for _ in range(cols - len(tiles)):               # empty places keep the columns the same width
             self.add_widget(Widget())
         with self.canvas.before:                         # the shelf is drawn behind the items
-            Color(0.05, 0.20, 0.45, 0.25)                # its soft shadow on the fridge wall...
-            self._shelf_shadow = Rectangle()
-            Color(*SHELF)                                # ...the glass shelf...
-            self._shelf = RoundedRectangle(radius=[dp(2)])
-            Color(1, 1, 1, 1)                            # ...and its bright front edge
-            self._edge = Rectangle()
+            Color(1, 1, 1, 1)
+            self._shadow = RoundedRectangle(radius=[1], texture=gradient_texture(
+                (0.02, 0.14, 0.36, 0.30), (0.02, 0.14, 0.36, 0)))   # shadow fading down the wall
+            Color(0.86, 0.94, 1, 0.30)
+            self._glass = Quad()                          # the glass top, seen slightly from above
+            Color(0.80, 0.88, 0.98, 1)
+            self._pegs = [RoundedRectangle(radius=[dp(2)]) for _ in range(2)]
+            Color(1, 1, 1, 1)
+            self._front = RoundedRectangle(radius=[dp(2.5)], texture=gradient_texture(
+                (1, 1, 1, 1), (0.80, 0.90, 1, 0.95)))      # frosted front edge
         self.bind(pos=self._draw, size=self._draw)
 
     def _draw(self, *_):
-        # A glass shelf along the bottom, a bit wider than the row (like the sketch).
-        self._shelf.pos = (self.x - dp(4), self.y + dp(2))
-        self._shelf.size = (self.width + dp(8), dp(5))
-        self._edge.pos, self._edge.size = (self.x - dp(4), self.y + dp(2)), (self.width + dp(8), dp(1.5))
-        self._shelf_shadow.pos = (self.x - dp(4), self.y - dp(2))
-        self._shelf_shadow.size = (self.width + dp(8), dp(4))
+        x, y, w = self.x, self.y, self.width
+        self._shadow.pos, self._shadow.size = (x, y - dp(12)), (w, dp(14))
+        self._glass.points = [x - dp(2), y + dp(7), x + w + dp(2), y + dp(7),     # front edge...
+                              x + w - dp(12), y + dp(17), x + dp(12), y + dp(17)]   # ...back edge
+        self._front.pos, self._front.size = (x - dp(3), y + dp(3)), (w + dp(6), dp(5))
+        for peg, px in zip(self._pegs, (x - dp(3), x + w - dp(7))):
+            peg.pos, peg.size = (px, y - dp(1)), (dp(10), dp(5))
 
 
 class DoorRack(BoxLayout):
-    """The door shelf: bottles standing behind a white rail, with posts at both ends."""
+    """The door shelf: items stand in a clear acrylic bin - you see them through its front panel."""
 
     def __init__(self, rows, **kwargs):
         super().__init__(orientation="vertical", spacing=dp(8), size_hint_y=None,
-                         padding=(dp(8), dp(4), dp(8), 0), **kwargs)
+                         padding=(dp(4), dp(4), dp(4), 0), **kwargs)
         self.bind(minimum_height=self.setter("height"))  # as tall as its rows
         for row in rows:
             self.add_widget(row)
         self._rows = rows
-        with self.canvas.after:                          # drawn IN FRONT of the bottles, like a real rail
-            Color(*SHELF)
-            self._lines = [Line(width=dp(1.6)) for _ in range(2 + len(rows))]
+        self._bins = []
+        with self.canvas.after:                          # drawn IN FRONT of the items, like real plastic
+            for _ in rows:
+                Color(1, 1, 1, 1)
+                panel = RoundedRectangle(radius=[dp(10)], texture=gradient_texture(
+                    (0.92, 0.97, 1, 0.42), (0.85, 0.93, 1, 0.20)))      # clear, slightly frosted panel
+                Color(1, 1, 1, 0.95)
+                rim = Line(width=dp(1.4))                 # its bright top edge
+                Color(1, 1, 1, 0.5)
+                gleam = Line(width=dp(1))                 # a small reflection
+                self._bins.append((panel, rim, gleam))
         self.bind(pos=self._draw, size=self._draw)
         for row in rows:                                 # rows are placed AFTER the rack moves, so
-            row.bind(pos=self._draw)                     # redraw the rails when they move too
+            row.bind(pos=self._draw)                     # redraw the bins when they move too
 
     def _draw(self, *_):
-        left, right = self.x + dp(1), self.right - dp(1)
-        top = self.top - dp(2)
-        self._lines[0].points = [left, top, left, self.y + dp(4)]       # left post
-        self._lines[1].points = [right, top, right, self.y + dp(4)]     # right post
-        for line, row in zip(self._lines[2:], self._rows):              # one front rail per row,
-            y = row.y + dp(8) + dp(12)                                  # low, under the name labels
-            line.points = [left, y, right, y] if row.has_items else []
+        for (panel, rim, gleam), row in zip(self._bins, self._rows):
+            x, w = row.x - dp(6), row.width + dp(12)
+            height = min(dp(40), row.height - dp(2))     # the bin covers the lower part of the items
+            y = row.y + dp(2)
+            panel.pos, panel.size = (x, y), (w, height)
+            rim.rounded_rectangle = (x, y, w, height, dp(10))
+            gleam.points = [x + dp(14), y + height - dp(7), x + dp(60), y + height - dp(7)]
 
 
 def chunks(items, size):
@@ -294,30 +315,33 @@ class PantryScreen(Screen):
         self._fill_fridge(items, empty=not food)
 
     # ---------------------------------------------------------------- drawing helpers
-    def _rows(self, items, cols, kind, minimum=1):
-        """Shelf rows for `items`, `cols` per row; at least `minimum` rows (empty shelves too)."""
+    def _rows(self, items, cols, minimum=1):
+        """Shelf rows for `items`, `cols` per row; at least `minimum` rows (empty shelves too).
+        Each row is as tall as its tallest container (a can and a jar can share a shelf)."""
         tiles = [ItemTile(i, self.open_item) for i in items]
         self.tiles.update({t.item.id: t for t in tiles})  # remembered for the remove animation
         groups = chunks(tiles, cols)
         groups += [[] for _ in range(minimum - len(groups))]   # add empty shelves if needed
-        return [ShelfRow(g, cols, art_height(kind) if g else EMPTY_SHELF_HEIGHT) for g in groups]
+        return [ShelfRow(g, cols, max(art_height(t.art.kind) for t in g) if g else EMPTY_SHELF_HEIGHT)
+                for g in groups]
 
     def _fill_fridge(self, items, empty):
         """Jars on the shelves, dishes on the leftovers shelf, bottles in the door rack."""
         inner = self.list_box                             # the scrolling inside of the fridge
         caption = self.scene.caption                      # the shared caption style, in white
-        by_kind = {kind: [i for i in items if i.kept_in() == kind] for kind in CONTAINERS}
+        place = {p: [i for i in items if CONTAINER_PLACE[i.kept_in()] == p]   # shelves / leftovers / door
+                 for p in ("shelves", "leftovers", "door")}
         if empty:                                         # only Water: say how to start
             inner.add_widget(WrapLabel(text="Your fridge is empty. Tap [b]+ Add Item[/b] below.",
                                        color=WHITE, halign="center", font_size=sp(14)))
         inner.add_widget(caption("Shelves"))
-        for row in self._rows(by_kind["jar"], 3, "jar", minimum=2):
+        for row in self._rows(place["shelves"], 3, minimum=2):
             inner.add_widget(row)
         inner.add_widget(caption("Leftovers"))
-        for row in self._rows(by_kind["dish"], 3, "dish"):
+        for row in self._rows(place["leftovers"], 3):
             inner.add_widget(row)
         inner.add_widget(caption("Door rack"))
-        inner.add_widget(DoorRack(self._rows(by_kind["bottle"], 3, "bottle")))
+        inner.add_widget(DoorRack(self._rows(place["door"], 3)))
 
     # ---------------------------------------------------------------- tapping an item
     def open_item(self, item):
@@ -402,12 +426,12 @@ class ContainerChoice(ButtonBehavior, BoxLayout):
     """One line in the container drop-down: picture + name."""
 
     def __init__(self, kind, **kwargs):
-        super().__init__(size_hint_y=None, height=dp(52), padding=(dp(8), dp(4)), spacing=dp(10), **kwargs)
+        super().__init__(size_hint_y=None, height=dp(52), padding=(dp(6), dp(4)), spacing=dp(8), **kwargs)
         self.kind = kind
         bg_rect(self, WHITE, radius=dp(12))
         self.add_widget(Image(source=icon(f"container_{kind}"), fit_mode="contain",
                               size_hint_x=None, width=dp(40)))
-        self.label = Label(text=CONTAINER_LABELS[kind], color=INK, font_size=sp(15), halign="left")
+        self.label = Label(text=CONTAINER_LABELS[kind], color=INK, font_size=sp(14), halign="left")
         self.label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align
         self.add_widget(self.label)
 
@@ -428,7 +452,8 @@ class ContainerButton(ButtonBehavior, BoxLayout):
             Color(*MUTED)
             self._arrow = Triangle()
         self.bind(pos=self._draw_arrow, size=self._draw_arrow)
-        self.dropdown = SoftDropDown(auto_width=False, width=dp(190))
+        self.dropdown = SoftDropDown(auto_width=False, width=dp(300))
+        self.dropdown.container.cols = 2                  # 8 choices: two columns of four
         self.options = {}
         for kind in CONTAINERS:
             option = ContainerChoice(kind)

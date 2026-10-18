@@ -28,10 +28,15 @@ APPLIANCES = ["Stove", "Rice Cooker", "Oven", "Microwave"]
 # Where a pantry item lives - only used for grouping in the Fridge screen.
 CATEGORIES = ["Fridge", "Outside"]   # "Outside" = cupboard / shelf, i.e. not refrigerated
 
-# What an item is kept in - decides its picture and its place in the fridge drawing (version 4.1):
-#   jar    -> on the shelves      bottle -> in the door rack      dish -> on the leftovers shelf
-CONTAINERS = ["bottle", "jar", "dish"]
-CONTAINER_LABELS = {"bottle": "Bottle", "jar": "Glass jar", "dish": "Dish"}   # names shown in the form
+# What an item is kept in - decides its picture and its place in the fridge drawing
+# (version 4.1: jar / bottle / dish; version 4.4 adds carton, can, tub, food box and basket).
+CONTAINERS = ["jar", "bottle", "dish", "carton", "can", "tub", "box", "basket"]
+CONTAINER_LABELS = {"jar": "Glass jar", "bottle": "Bottle", "dish": "Dish", "carton": "Carton",
+                    "can": "Can", "tub": "Tub", "box": "Food box", "basket": "Basket"}   # names in the form
+# Where each container stands in the fridge picture.
+CONTAINER_PLACE = {"jar": "shelves", "tub": "shelves", "can": "shelves", "basket": "shelves",
+                   "dish": "leftovers", "box": "leftovers",
+                   "bottle": "door", "carton": "door"}
 
 # Water is always in the fridge (version 4.1): it never expires, never runs out and can't be removed.
 WATER_NAME = "Water"

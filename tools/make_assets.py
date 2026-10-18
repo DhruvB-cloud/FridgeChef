@@ -238,68 +238,225 @@ def _finish_icon(big, kind, shadow_box):
     _gone_bad(final, kind).save(os.path.join(ICONS_DIR, f"container_{kind}_expired.png"), "PNG")
 
 
-def _paper_label(d, s, box, outline=(232, 214, 186, 255)):
-    """The cream paper label the item's name is written on."""
-    d.rounded_rectangle(s(*box), radius=40, fill=(255, 248, 232, 255), outline=outline, width=12)
+def _gradient(size, stops, horizontal=False):
+    """An RGBA picture filled with a colour gradient through `stops` = [(position 0-1, RGBA), ...].
+    horizontal=True runs left -> right (round things: dark edges, bright highlight = 3D)."""
+    w, h = size
+    n = w if horizontal else h
+    strip = Image.new("RGBA", (n, 1))
+    px = strip.load()
+    for i in range(n):
+        t = i / max(n - 1, 1)
+        for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
+            if t <= p1 or p1 == stops[-1][0]:
+                k = (t - p0) / (p1 - p0) if p1 > p0 else 0
+                px[i, 0] = tuple(int(a + (b - a) * min(max(k, 0), 1)) for a, b in zip(c0, c1))
+                break
+    if horizontal:
+        return strip.resize((w, h), Image.NEAREST)
+    return strip.resize((h, 1)).transpose(Image.ROTATE_270).resize((w, h), Image.NEAREST)
+
+
+class _Filled:
+    """Wraps an ImageDraw so every shape is FILLED (Pillow otherwise draws only the outline)."""
+
+    def __init__(self, draw):
+        self.draw = draw
+
+    def __getattr__(self, name):
+        method = getattr(self.draw, name)
+        return lambda *args, **kwargs: method(*args, **{"fill": 255, **kwargs})
+
+
+def _shape(big, draw, fill):
+    """Paint `fill` (a gradient picture) inside the shape that `draw(ImageDraw)` draws."""
+    mask = Image.new("L", big.size, 0)
+    draw(_Filled(ImageDraw.Draw(mask)))
+    layer = Image.new("RGBA", big.size, (0, 0, 0, 0))
+    layer.paste(fill, (0, 0), mask)
+    big.alpha_composite(layer)
+
+
+def _mix(c, other, k):
+    """Blend colour c towards `other` by k (0-1). Works on RGB or RGBA tuples."""
+    return tuple(int(a + (b - a) * k) for a, b in zip(c, other))
+
+
+def _round(c, alpha=255):
+    """Gradient stops that make a flat colour look round (cylinder): dark edge, bright highlight."""
+    c = tuple(c[:3]) + (alpha,)
+    dark, light = _mix(c, (0, 0, 0, alpha), 0.28), _mix(c, (255, 255, 255, alpha), 0.45)
+    return [(0, dark), (0.16, light), (0.42, c), (0.85, _mix(c, (0, 0, 0, alpha), 0.12)), (1, dark)]
+
+
+def _label(big, s, box, accent=None):
+    """The cream name label (the app writes the item's name on it), softly shaded."""
+    _shape(big, lambda d: d.rounded_rectangle(s(*box), radius=36),
+           _gradient(big.size, [(0, (255, 252, 243, 255)), (1, (243, 233, 212, 255))]))
+    d = ImageDraw.Draw(big)
+    l, t, r, b = box
+    d.rounded_rectangle(s(*box), radius=36, outline=(225, 208, 178, 255), width=6)
+    if accent:                                            # two thin coloured stripes, like printing
+        d.line(s(l + 8, t + 7, r - 8, t + 7), fill=accent, width=8)
+        d.line(s(l + 8, b - 7, r - 8, b - 7), fill=accent, width=8)
+
+
+def _shine(big, s, box, alpha=150, radius=24):
+    """A soft white reflection (glossy plastic / glass)."""
+    layer = Image.new("RGBA", big.size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle(s(*box), radius=radius, fill=(255, 255, 255, alpha))
+    big.alpha_composite(layer.filter(ImageFilter.GaussianBlur(3)))
 
 
 def make_jar_icon():
-    """A wide glass jar with a golden lid (pickles, rice, onions, spices...)."""
+    """A glass jar with a golden lid (pickles, rice, onions, spices...)."""
     big, d, s = _icon_canvas("jar")
-    d.rounded_rectangle(s(30, 66, 270, 244), radius=180, fill=(224, 240, 250, 255),
-                        outline=(160, 196, 222, 255), width=20)                 # glass body
-    d.rectangle(s(76, 54, 224, 72), fill=(206, 226, 240, 255))                  # neck of the jar
-    d.rounded_rectangle(s(64, 16, 236, 58), radius=40, fill=(242, 184, 75, 255))   # lid
-    for x in range(88, 230, 28):                                                # ridges on the lid
-        d.line(s(x, 22, x, 52), fill=(214, 152, 52, 255), width=16)
-    d.rounded_rectangle(s(40, 82, 50, 228), radius=20, fill=(255, 255, 255, 200))   # shine
-    _paper_label(d, s, _label_box("jar"))
+    _shape(big, lambda d: d.rounded_rectangle(s(30, 64, 270, 244), radius=200),
+           _gradient(big.size, _round((206, 232, 248), 240), horizontal=True))           # glass body
+    d.rounded_rectangle(s(30, 64, 270, 244), radius=200, outline=(150, 192, 222, 255), width=14)
+    _shape(big, lambda d: d.rectangle(s(76, 50, 224, 70)),
+           _gradient(big.size, _round((186, 214, 234)), horizontal=True))                 # neck
+    _shape(big, lambda d: d.rounded_rectangle(s(58, 12, 242, 56), radius=48),
+           _gradient(big.size, _round((247, 186, 64)), horizontal=True))                  # golden lid
+    for x in range(84, 230, 22):                                                        # lid ridges
+        d.line(s(x, 18, x, 50), fill=(212, 146, 40, 150), width=8)
+    _shine(big, s, (44, 84, 58, 226), 170)
+    _shine(big, s, (74, 18, 130, 26), 140, radius=12)
+    _label(big, s, _label_box("jar"))
     _finish_icon(big, "jar", s(30, 228, 270, 256))
 
 
 def make_bottle_icon():
-    """A brown glass bottle with a red cap (sauces, oil, milk, water...)."""
+    """A glass bottle with a red cap (sauces, oil, water...)."""
     big, d, s = _icon_canvas("bottle")
-    glass, dark = (205, 128, 62, 255), (172, 100, 44, 255)                       # amber glass
-    d.rounded_rectangle(s(30, 112, 170, 290), radius=110, fill=glass)            # body
-    d.polygon([tuple(s(80, 70)), tuple(s(120, 70)), tuple(s(170, 136)), tuple(s(30, 136))],
-              fill=glass)                                                       # sloping shoulders
-    d.rectangle(s(80, 36, 120, 80), fill=glass)                                 # neck
-    d.rounded_rectangle(s(74, 6, 126, 40), radius=30, fill=(214, 92, 80, 255))  # cap
-    d.rectangle(s(74, 32, 126, 40), fill=(186, 70, 62, 255))                    # cap's lower ring
-    d.rounded_rectangle(s(42, 118, 54, 146), radius=20, fill=(255, 255, 255, 120))   # shine
-    l, t, r, b = _label_box("bottle")
-    d.rectangle(s(l, t, r, b), fill=(255, 248, 232, 255))                       # label around the body
-    d.line(s(l, t, r, t), fill=dark, width=12)                                  # label edges
-    d.line(s(l, b, r, b), fill=dark, width=12)
+    body = lambda d: (d.rounded_rectangle(s(30, 110, 170, 292), radius=150),
+                      d.polygon([tuple(s(82, 62)), tuple(s(118, 62)), tuple(s(170, 130)), tuple(s(30, 130))]),
+                      d.rectangle(s(82, 32, 118, 80)))
+    _shape(big, body, _gradient(big.size, _round((206, 116, 52)), horizontal=True))      # amber glass
+    _shape(big, lambda d: d.rounded_rectangle(s(74, 4, 126, 40), radius=28),
+           _gradient(big.size, _round((232, 80, 70)), horizontal=True))                   # cap
+    d.rectangle(s(74, 32, 126, 40), fill=(180, 56, 52, 255))
+    _shine(big, s, (42, 120, 54, 284), 120)
+    _label(big, s, _label_box("bottle"), accent=(226, 86, 72, 255))
     _finish_icon(big, "bottle", s(30, 276, 170, 300))
 
 
 def make_dish_icon():
     """A bowl of food under a clear lid (leftovers, cooked rice, curries...)."""
     big, d, s = _icon_canvas("dish")
-    d.chord(s(64, 36, 236, 204), 180, 360, fill=(214, 234, 250, 170),
-            outline=(150, 190, 222, 255), width=16)                             # clear, slightly blue dome lid
-    d.ellipse(s(138, 24, 162, 44), fill=(150, 190, 222, 255))                   # knob on the lid
-    d.ellipse(s(40, 104, 260, 140), fill=(226, 140, 72, 255))                   # food (curry colour)
-    for x, y in ((96, 112), (140, 108), (186, 118), (120, 124), (210, 110)):   # green garnish
-        d.ellipse(s(x, y, x + 14, y + 10), fill=(110, 170, 90, 255))
-    # The bowl: the lower half of an ellipse, with a peach stripe painted inside its shape.
-    bowl = Image.new("L", big.size, 0)
-    ImageDraw.Draw(bowl).chord(s(20, 8, 280, 248), 0, 180, fill=255)            # bowl outline as a mask
-    body = Image.new("RGBA", big.size, (255, 250, 242, 255))                    # cream china
-    ImageDraw.Draw(body).rectangle(s(0, 222, 300, 232), fill=(245, 168, 135, 255))   # peach stripe
-    big.paste(body, (0, 0), bowl)
-    d.line(s(20, 128, 280, 128), fill=(236, 224, 210, 255), width=16)           # bowl rim
-    _paper_label(d, s, _label_box("dish"))
-    _finish_icon(big, "dish", s(60, 230, 240, 256))
+    _shape(big, lambda d: d.chord(s(62, 34, 238, 206), 180, 360),
+           _gradient(big.size, [(0, (232, 245, 255, 190)), (1, (190, 220, 246, 130))]))   # clear dome
+    d.chord(s(62, 34, 238, 206), 180, 360, outline=(150, 192, 224, 255), width=12)
+    _shape(big, lambda d: d.ellipse(s(136, 20, 164, 44)),
+           _gradient(big.size, _round((168, 196, 220)), horizontal=True))                 # knob
+    _shape(big, lambda d: d.ellipse(s(38, 102, 262, 142)),
+           _gradient(big.size, [(0, (246, 168, 86, 255)), (1, (208, 112, 52, 255))]))    # curry
+    for x, y in ((92, 112), (138, 106), (186, 116), (118, 124), (214, 110)):           # garnish
+        d.ellipse(s(x, y, x + 16, y + 11), fill=(96, 168, 86, 255))
+    _shape(big, lambda d: d.chord(s(20, 8, 280, 248), 0, 180),
+           _gradient(big.size, [(0, (255, 255, 255, 255)), (0.5, (255, 255, 255, 255)),
+                                (1, (232, 222, 210, 255))]))                              # china bowl
+    _shape(big, lambda d: d.chord(s(20, 8, 280, 248), 0, 180),
+           _gradient(big.size, [(0, (0, 0, 0, 0)), (0.85, (0, 0, 0, 0)), (0.86, (64, 168, 160, 255)),
+                                (0.9, (64, 168, 160, 255)), (0.91, (0, 0, 0, 0)), (1, (0, 0, 0, 0))]))   # teal stripe
+    d.line(s(22, 128, 278, 128), fill=(236, 226, 212, 255), width=14)                  # rim
+    _shine(big, s, (92, 54, 150, 64), 160, radius=10)
+    _label(big, s, _label_box("dish"))
+    _finish_icon(big, "dish", s(60, 232, 240, 256))
+
+
+def make_carton_icon():
+    """A milk / juice carton with a folded top."""
+    big, d, s = _icon_canvas("carton")
+    _shape(big, lambda d: d.rounded_rectangle(s(34, 94, 166, 290), radius=40),
+           _gradient(big.size, _round((250, 250, 252)), horizontal=True))                 # white box
+    _shape(big, lambda d: d.polygon([tuple(s(34, 96)), tuple(s(100, 40)), tuple(s(166, 96))]),
+           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # blue roof
+    _shape(big, lambda d: d.rounded_rectangle(s(84, 16, 116, 50), radius=12),
+           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # top fin
+    _shape(big, lambda d: d.rectangle(s(34, 96, 166, 132)),
+           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # blue band
+    _shine(big, s, (44, 140, 54, 280), 130)
+    _label(big, s, _label_box("carton"), accent=(86, 156, 236, 255))
+    _finish_icon(big, "carton", s(34, 276, 166, 300))
+
+
+def make_can_icon():
+    """A tin can (beans, tomatoes, coconut milk...)."""
+    big, d, s = _icon_canvas("can")
+    _shape(big, lambda d: d.rounded_rectangle(s(20, 34, 200, 236), radius=28),
+           _gradient(big.size, _round((206, 212, 220)), horizontal=True))                 # steel body
+    _shape(big, lambda d: d.rectangle(s(20, 60, 200, 212)),
+           _gradient(big.size, _round((222, 72, 72)), horizontal=True))                   # red print
+    _shape(big, lambda d: d.ellipse(s(20, 18, 200, 50)),
+           _gradient(big.size, [(0, (238, 242, 246, 255)), (1, (178, 186, 196, 255))]))  # lid
+    d.ellipse(s(34, 24, 186, 44), outline=(160, 168, 180, 255), width=8)
+    for y in (60, 212):                                                                 # rims
+        d.line(s(20, y, 200, y), fill=(160, 168, 180, 255), width=10)
+    _shine(big, s, (32, 66, 42, 206), 110)
+    _label(big, s, _label_box("can"))
+    _finish_icon(big, "can", s(20, 222, 200, 256))
+
+
+def make_tub_icon():
+    """A plastic tub with a lid (curd, yogurt, butter, ice cream...)."""
+    big, d, s = _icon_canvas("tub")
+    _shape(big, lambda d: d.polygon([tuple(s(40, 64)), tuple(s(260, 64)), tuple(s(240, 210)), tuple(s(60, 210))]),
+           _gradient(big.size, _round((252, 250, 246)), horizontal=True))                 # white tub
+    d.line(s(60, 210, 240, 210), fill=(214, 206, 196, 255), width=10)
+    _shape(big, lambda d: d.rounded_rectangle(s(26, 36, 274, 70), radius=40),
+           _gradient(big.size, _round((84, 198, 170)), horizontal=True))                  # mint lid
+    _shine(big, s, (58, 42, 160, 50), 150, radius=10)
+    _shine(big, s, (54, 80, 66, 196), 120)
+    _label(big, s, _label_box("tub"), accent=(84, 198, 170, 255))
+    _finish_icon(big, "tub", s(56, 202, 244, 230))
+
+
+def make_box_icon():
+    """A glass food box with a snap-on lid (meal prep, cut fruit, takeaway...)."""
+    big, d, s = _icon_canvas("box")
+    _shape(big, lambda d: d.rounded_rectangle(s(24, 70, 276, 204), radius=110),
+           _gradient(big.size, _round((214, 236, 250), 230), horizontal=True))            # glass box
+    _shape(big, lambda d: d.rounded_rectangle(s(36, 150, 264, 196), radius=70),
+           _gradient(big.size, [(0, (252, 240, 210, 255)), (1, (236, 214, 170, 255))]))  # rice inside
+    for x in (60, 110, 196, 236):                                                       # peas / greens
+        d.ellipse(s(x, 158, x + 18, 172), fill=(104, 174, 92, 255))
+    d.rounded_rectangle(s(24, 70, 276, 204), radius=110, outline=(150, 192, 222, 255), width=12)
+    _shape(big, lambda d: d.rounded_rectangle(s(14, 44, 286, 80), radius=50),
+           _gradient(big.size, _round((112, 136, 232)), horizontal=True))                 # violet lid
+    for x in (34, 246):                                                                 # the snap clips
+        _shape(big, lambda d, x=x: d.rounded_rectangle(s(x, 66, x + 20, 100), radius=20),
+               _gradient(big.size, _round((92, 112, 208)), horizontal=True))
+    _shine(big, s, (60, 50, 170, 58), 150, radius=10)
+    _label(big, s, _label_box("box"))
+    _finish_icon(big, "box", s(24, 196, 276, 220))
+
+
+def make_basket_icon():
+    """A wooden crate of fresh vegetables (onions, tomatoes, potatoes, greens...)."""
+    big, d, s = _icon_canvas("basket")
+    veg = [((40, 54, 116, 130), (236, 76, 64)),       # tomato
+           ((96, 30, 176, 110), (96, 176, 84)),       # broccoli / greens
+           ((150, 50, 222, 122), (154, 98, 196)),     # aubergine / onion
+           ((196, 60, 262, 126), (246, 156, 52))]     # orange / carrot
+    for box, color in veg:                                                              # round, shiny veg
+        _shape(big, lambda d, b=box: d.ellipse(s(*b)), _gradient(big.size, _round(color), horizontal=True))
+    d.ellipse(s(64, 62, 80, 74), fill=(255, 255, 255, 170))
+    d.line(s(78, 54, 84, 40), fill=(80, 150, 70, 255), width=12)                       # tomato stalk
+    _shape(big, lambda d: d.rounded_rectangle(s(22, 98, 278, 230), radius=40),
+           _gradient(big.size, [(0, (214, 160, 102, 255)), (1, (170, 112, 62, 255))]))    # wooden crate
+    for y in (124, 176):                                                                # slats
+        d.line(s(26, y, 274, y), fill=(150, 98, 54, 255), width=8)
+    d.rounded_rectangle(s(22, 98, 278, 230), radius=40, outline=(146, 94, 50, 255), width=10)
+    _label(big, s, _label_box("basket"))
+    _finish_icon(big, "basket", s(22, 218, 278, 240))
 
 
 def make_container_icons():
-    """The three pictures a fridge item can be shown as, plus their 'expired' (mouldy) versions."""
-    make_jar_icon()
-    make_bottle_icon()
-    make_dish_icon()
+    """Every picture a fridge item can be shown as, plus their 'expired' (mouldy) versions."""
+    for make in (make_jar_icon, make_bottle_icon, make_dish_icon, make_carton_icon, make_can_icon,
+                 make_tub_icon, make_box_icon, make_basket_icon):
+        make()
     print("container icons -> assets/icons/container_*.png")
 
 
