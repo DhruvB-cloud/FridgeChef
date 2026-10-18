@@ -12,6 +12,7 @@ WHY THIS FILE EXISTS:
 
 RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
 ONLY THE JAR / BOTTLE / DISH ICONS: .\.venv\Scripts\python tools\make_assets.py containers
+ONLY THE WOOD / LEATHER TEXTURES:  .\.venv\Scripts\python tools\make_assets.py textures
 """
 
 import os
@@ -302,9 +303,58 @@ def make_container_icons():
     print("container icons -> assets/icons/container_*.png")
 
 
+def _streaks(size, rows, sigma, seed):
+    """Grey noise stretched tall: random dots squeezed into `rows` lines, then pulled to full
+    height - which turns them into long vertical streaks, like the grain of wood."""
+    random.seed(seed)                                     # effect_noise uses Python's random numbers
+    w, h = size
+    noise = Image.effect_noise((w, rows), sigma)          # grey noise, mostly mid-grey
+    return noise.resize((w, h), Image.BICUBIC).filter(ImageFilter.GaussianBlur(1))
+
+
+def make_oak_texture(out_path, size=(768, 1280)):
+    """Light oak planks for the Recipes 'kitchen counter'."""
+    from PIL import ImageChops, ImageOps
+    w, h = size
+    grain = ImageChops.add(_streaks(size, 10, 40, 1), _streaks(size, 60, 25, 2), scale=2)   # broad + fine grain
+    wood = ImageOps.colorize(ImageOps.autocontrast(grain, cutoff=2),
+                             black=(190, 144, 98), white=(224, 188, 140))   # dark -> light oak (soft contrast)
+    d = ImageDraw.Draw(wood)
+    plank = w // 4                                        # four planks across
+    rng = random.Random(3)
+    for i in range(4):
+        shade = rng.randint(-10, 10)                      # each plank a slightly different tone
+        overlay = Image.new("RGB", (plank, h), (128 + shade,) * 3)
+        part = wood.crop((i * plank, 0, (i + 1) * plank, h))
+        wood.paste(ImageChops.overlay(part, overlay), (i * plank, 0))
+        if i:
+            d.line([(i * plank, 0), (i * plank, h)], fill=(140, 98, 60), width=3)   # seam between planks
+    wood.save(out_path, "JPEG", quality=88)
+
+
+def make_leather_texture(out_path, size=(512, 768)):
+    """Brown leather for the Cookbook cover."""
+    from PIL import ImageOps
+    random.seed(4)
+    grain = Image.effect_noise(size, 30).filter(ImageFilter.GaussianBlur(1.2))
+    leather = ImageOps.colorize(ImageOps.autocontrast(grain, cutoff=1),
+                                black=(92, 46, 34), white=(140, 76, 56))
+    leather.save(out_path, "JPEG", quality=88)
+
+
+def make_textures():
+    ui_dir = os.path.join(os.path.dirname(ICONS_DIR), "ui")
+    make_oak_texture(os.path.join(ui_dir, "oak.jpg"))
+    make_leather_texture(os.path.join(ui_dir, "leather.jpg"))
+    print("textures -> assets/ui/oak.jpg, leather.jpg")
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only redraw these 3
         make_container_icons()
+        sys.exit()
+    if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather
+        make_textures()
         sys.exit()
     os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
@@ -320,6 +370,7 @@ if __name__ == "__main__":
         make_icon(char, os.path.join(ICONS_DIR, f"{name}.png"))
         print("icon:", name)
     make_container_icons()
+    make_textures()
     make_ui_shapes()
     make_app_icon(os.path.join(os.path.dirname(ICONS_DIR), "app_icon.png"))   # assets/app_icon.png
     print("app icon -> assets/app_icon.png")

@@ -27,8 +27,8 @@ from datetime import date, timedelta              # expiry dates
 
 from kivy.animation import Animation              # the "disappearing from the fridge" effect
 from kivy.core.text import Label as CoreLabel     # measures text without showing it (font fitting)
-from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Rectangle, Scale, Translate,
-                           Triangle)              # low-level drawing: shelves, rail, animation
+from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Rectangle, RoundedRectangle,
+                           Scale, Translate, Triangle)   # low-level drawing: shelves, rail, handle
 from kivy.metrics import dp, sp
 from kivy.properties import NumericProperty       # values Animation can change smoothly
 from kivy.uix.behaviors import ButtonBehavior     # makes an item tappable
@@ -52,9 +52,9 @@ from app.ui.date_picker import DatePicker         # Day / Month / Year drop-down
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
 from app.ui.widgets import (EGG_FILL, NONVEG_FILL, VEG_FILL,
                             DANGER, DANGER_SOFT, HEX_RED, INK, INPUT_BG, MUTED, NEUTRAL,
-                            SELECTED_FILL, WHITE, Card, Header, SoftButton, SoftDropDown,
+                            SELECTED_FILL, WHITE, Card, Header, Scene, SoftButton, SoftDropDown,
                             SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, labeled,
-                            light_popup, scroll_list, set_bg, show_message)
+                            light_popup, primary_action, scroll_list, set_bg, show_message)
 
 
 # Food type -> (fill colour of the Name box, small coloured explanation under it).
@@ -64,9 +64,7 @@ FOOD_STYLES = {
     "veg": (VEG_FILL, "[color=4f8a5b][b]Vegetarian[/b][/color]"),
 }
 
-# Colours of the fridge drawing (the blues of the sketch, slightly softened).
-FRIDGE_FRAME = (0.70, 0.84, 0.97, 1)              # light blue outer body of the fridge
-FRIDGE_INSIDE = (0.29, 0.60, 0.92, 1)             # blue inside
+# The fridge's colours are the "fridge" scene in widgets.SCENES (shared look of all tabs).
 SHELF = (1, 1, 1, 0.95)                           # white glass shelves and the door rail
 
 MAX_ART_WIDTH = {"jar": dp(104), "dish": dp(104), "bottle": dp(84)}   # pictures never get bigger than this
@@ -239,20 +237,31 @@ class PantryScreen(Screen):
         self.app = app                                    # gives access to app.db and helpers
         self.tiles = {}                                   # item id -> its tile (for the animation)
         root = BoxLayout(orientation="vertical")
-        self.header = Header("My Fridge")
+        self.header = Header("My Fridge", icon="tab_fridge")
         root.add_widget(self.header)
         body = BoxLayout(orientation="vertical", padding=(dp(16), dp(4), dp(16), dp(8)), spacing=dp(10))
         # Banner area for "expires today" warnings (filled in refresh()).
         self.banner = BoxLayout(orientation="vertical", size_hint_y=None, height=0)   # height=0: empty = no gap
         self.banner.bind(minimum_height=self.banner.setter("height"))
         body.add_widget(self.banner)
-        scroll, self.list_box = scroll_list(padding=(0, dp(2), 0, dp(8)))   # the fridge scrolls
-        body.add_widget(scroll)
-        # The big green button under the fridge, as in the sketch.
-        body.add_widget(SoftButton("+  Add Item", height=dp(58), font_size=sp(22),
-                                   on_release=lambda *_: AddItemPopup(self.app, self.refresh).open()))
+        # The fridge itself stays put and its shelves scroll INSIDE it, like looking into a real one.
+        self.scene = Scene("fridge")
+        with self.scene.canvas.after:                     # the door handle on the right of the frame
+            Color(1, 1, 1, 0.9)
+            self._handle = RoundedRectangle(radius=[dp(3)])
+        self.scene.bind(pos=self._draw_handle, size=self._draw_handle)
+        scroll, self.list_box = scroll_list(spacing=dp(6), padding=(0, 0, 0, dp(4)))
+        self.scene.inner.add_widget(scroll)
+        body.add_widget(self.scene)
+        # The big green button under the fridge (the same main button as on the other tabs).
+        body.add_widget(primary_action("+  Add Item", lambda: AddItemPopup(self.app, self.refresh).open()))
         root.add_widget(body)
         self.add_widget(root)
+
+    def _draw_handle(self, *_):
+        """A short white bar in the right edge of the frame, near the top - the fridge door handle."""
+        self._handle.pos = (self.scene.right - dp(7), self.scene.top - dp(118))
+        self._handle.size = (dp(5), dp(76))
 
     def on_pre_enter(self, *_):
         """Kivy calls this just before the screen is shown - always show fresh data."""
@@ -273,9 +282,9 @@ class PantryScreen(Screen):
                                       font_size=sp(13), color=MUTED))
             self.banner.add_widget(card)
 
-        self.list_box.clear_widgets()                     # rebuild the drawing from scratch
+        self.list_box.clear_widgets()                     # rebuild the shelves from scratch
         self.tiles = {}
-        self.list_box.add_widget(self._fridge(items, empty=not food))
+        self._fill_fridge(items, empty=not food)
 
     # ---------------------------------------------------------------- drawing helpers
     def _rows(self, items, cols, kind, minimum=1):
@@ -286,39 +295,22 @@ class PantryScreen(Screen):
         groups += [[] for _ in range(minimum - len(groups))]   # add empty shelves if needed
         return [ShelfRow(g, cols, art_height(kind) if g else EMPTY_SHELF_HEIGHT) for g in groups]
 
-    @staticmethod
-    def _caption(text):
-        """Small faint caption above a part of the fridge ('Shelves', 'Door rack'...)."""
-        label = Label(text=text, color=(1, 1, 1, 0.75), font_size=sp(11), bold=True,
-                      size_hint_y=None, height=dp(16), halign="left")
-        label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align
-        return label
-
-    def _fridge(self, items, empty):
-        """The blue fridge: jars on the shelves, dishes on the leftovers shelf, bottles in the door."""
-        # Two rounded boxes inside each other: the light blue body and the blue inside.
-        outer = BoxLayout(orientation="vertical", padding=dp(10), size_hint_y=None)
-        outer.bind(minimum_height=outer.setter("height"))
-        bg_rect(outer, FRIDGE_FRAME, radius=dp(28), shadow=True)
-        inner = BoxLayout(orientation="vertical", padding=(dp(12), dp(10)), spacing=dp(6),
-                          size_hint_y=None)
-        inner.bind(minimum_height=inner.setter("height"))
-        bg_rect(inner, FRIDGE_INSIDE, radius=dp(20))
-        outer.add_widget(inner)
-
+    def _fill_fridge(self, items, empty):
+        """Jars on the shelves, dishes on the leftovers shelf, bottles in the door rack."""
+        inner = self.list_box                             # the scrolling inside of the fridge
+        caption = self.scene.caption                      # the shared caption style, in white
         by_kind = {kind: [i for i in items if i.kept_in() == kind] for kind in CONTAINERS}
         if empty:                                         # only Water: say how to start
             inner.add_widget(WrapLabel(text="Your fridge is empty. Tap [b]+ Add Item[/b] below.",
                                        color=WHITE, halign="center", font_size=sp(14)))
-        inner.add_widget(self._caption("Shelves"))
+        inner.add_widget(caption("Shelves"))
         for row in self._rows(by_kind["jar"], 3, "jar", minimum=2):
             inner.add_widget(row)
-        inner.add_widget(self._caption("Leftovers"))
+        inner.add_widget(caption("Leftovers"))
         for row in self._rows(by_kind["dish"], 3, "dish"):
             inner.add_widget(row)
-        inner.add_widget(self._caption("Door rack"))
+        inner.add_widget(caption("Door rack"))
         inner.add_widget(DoorRack(self._rows(by_kind["bottle"], 3, "bottle")))
-        return outer
 
     # ---------------------------------------------------------------- tapping an item
     def open_item(self, item):

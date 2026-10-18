@@ -92,17 +92,33 @@ def colored(text, hex_color, bold=False):
     return f"[color={hex_color}]{text}[/color]"
 
 
-def bg_rect(widget, color, radius=0, shadow=False):
+_TEXTURES = {}                                          # file name -> loaded texture (load each once)
+
+
+def ui_texture(name):
+    """A picture from assets/ui (e.g. 'oak.jpg') as a texture that shapes can be painted with."""
+    if name not in _TEXTURES:
+        from kivy.core.image import Image as CoreImage   # local import: only needed here
+        texture = CoreImage(os.path.join(UI_DIR, name)).texture
+        texture.wrap = "clamp_to_edge"                   # never repeat the far edge (avoids a thin seam line)
+        _TEXTURES[name] = texture
+    return _TEXTURES[name]
+
+
+def bg_rect(widget, color, radius=0, shadow=False, texture=None):
     """Paint a (rounded) background behind any widget and keep it in sync when it moves/resizes.
 
     shadow=True adds a very soft shadow slightly below the shape, which makes cards "float".
+    texture='oak.jpg' paints the shape with that picture (tinted by `color`; WHITE = true colours).
     """
     with widget.canvas.before:                          # drawn BEFORE (= behind) the children
         if shadow:
-            Color(0, 0, 0, 0.045)
+            Color(0, 0, 0, 0.06)
             widget._shadow = RoundedRectangle(radius=[radius + dp(2)])
         widget._bg_color = Color(*color)
-        widget._bg_rect = (RoundedRectangle(radius=[radius]) if radius else Rectangle())
+        tex = ui_texture(texture) if texture else None
+        widget._bg_rect = (RoundedRectangle(radius=[radius], texture=tex) if radius
+                           else Rectangle(texture=tex))
 
     def _sync(*_):                                       # follow the widget when it moves/resizes
         widget._bg_rect.pos = widget.pos
@@ -455,15 +471,21 @@ class Header(BoxLayout):
     """Big friendly title at the top of a screen, with an optional subtitle, Back button and
     a slot on the right (e.g. the 'Live' status chip on the Recipes tab)."""
 
-    def __init__(self, title, subtitle="", on_back=None, **kwargs):
+    def __init__(self, title, subtitle="", on_back=None, icon=None, **kwargs):
         super().__init__(size_hint_y=None, height=dp(72), padding=(dp(16), dp(10), dp(16), dp(6)),
-                         spacing=dp(10), **kwargs)
+                         spacing=dp(12), **kwargs)
         if on_back:
             self.add_widget(SoftButton("<", size_hint=(None, None), size=(dp(44), dp(44)),
                                        pos_hint={"center_y": 0.5}, bg=SURFACE, fg=INK,
                                        font_size=sp(20), on_release=lambda *_: on_back()))
+        if icon:                                         # the tab's icon in a soft rounded square
+            badge = BoxLayout(size_hint=(None, None), size=(dp(46), dp(46)), padding=dp(9),
+                              pos_hint={"center_y": 0.5})
+            bg_rect(badge, SURFACE, radius=dp(15), shadow=True)
+            badge.add_widget(icon_image(icon, dp(28)))
+            self.add_widget(badge)
         texts = BoxLayout(orientation="vertical")
-        self.title_label = Label(text=title, bold=True, font_size=sp(24), color=INK,
+        self.title_label = Label(text=title, bold=True, font_size=sp(23), color=INK,
                                  halign="left", valign="bottom", shorten=True, markup=True)
         self.subtitle_label = Label(text=subtitle, font_size=sp(13), color=MUTED, halign="left",
                                     valign="top", size_hint_y=0.6, markup=True, shorten=True)
@@ -644,4 +666,101 @@ class RecipeCard(TapCard):
         lines = recipe_status_lines(match)
         if lines:                                        # only the most important status line
             self.add_widget(WrapLabel(text=lines[0], font_size=sp(12), max_lines=2))
+        self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists
+
+
+
+# ----------------------------------------------------------------------------------------------
+# KITCHEN SCENES (version 4.2) - one look for every tab
+# ----------------------------------------------------------------------------------------------
+# Every tab shows its content inside a "scene": a thick rounded frame around an inner surface,
+# drawn like a part of a kitchen. The SAME frame size, corner roundness, shadow, caption style and
+# spacing are used everywhere - only the colours / textures change - so the tabs look like one app:
+#     Fridge   -> a blue fridge           Recipes  -> an oak-wood kitchen counter
+#     Cookbook -> an open book            Calendar -> a paper wall calendar
+#     Profile  -> a warm "chef's corner"
+SCENES = {
+    #              frame colour (or texture)       inner surface (or texture)      caption colour
+    "fridge": dict(frame=(0.70, 0.84, 0.97, 1), surface=(0.29, 0.60, 0.92, 1), caption=(1, 1, 1, 0.85)),
+    "kitchen": dict(frame=(0.55, 0.37, 0.23, 1), surface=WHITE, surface_texture="oak.jpg",
+                    caption=(0.33, 0.20, 0.10, 1)),
+    # (The book's frame is plain leather colour: Kivy leaves a 1-pixel sliver beside rounded shapes
+    #  painted with a picture, which showed next to the book. The cover itself uses the texture.)
+    "book": dict(frame=(0.45, 0.24, 0.18, 1), surface=(0.99, 0.97, 0.92, 1),
+                 caption=(0.47, 0.27, 0.19, 1)),
+    "calendar": dict(frame=(0.80, 0.88, 0.81, 1), surface=WHITE, caption=PRIMARY_DARK),
+    "profile": dict(frame=(0.97, 0.88, 0.82, 1), surface=(1, 0.984, 0.968, 1), caption=(0.70, 0.40, 0.28, 1)),
+}
+SCENE_FRAME = dp(9)                  # thickness of the frame
+SCENE_RADIUS = dp(20)                # roundness of the inner surface (the frame adds its thickness)
+
+
+class Scene(BoxLayout):
+    """A kitchen 'room' (see SCENES). Put the tab's content into `scene.inner`."""
+
+    def __init__(self, theme, **kwargs):
+        kwargs.setdefault("padding", SCENE_FRAME)
+        super().__init__(orientation="vertical", **kwargs)
+        self.theme = SCENES[theme]
+        bg_rect(self, self.theme["frame"], radius=SCENE_RADIUS + SCENE_FRAME, shadow=True,
+                texture=self.theme.get("frame_texture"))
+        self.inner = BoxLayout(orientation="vertical", padding=(dp(12), dp(10)), spacing=dp(8))
+        bg_rect(self.inner, self.theme["surface"], radius=SCENE_RADIUS,
+                texture=self.theme.get("surface_texture"))
+        self.add_widget(self.inner)
+
+    def caption(self, text):
+        """A small label in this scene's colour, e.g. 'SHELVES' or 'RECOMMENDED FOR LUNCH'."""
+        return scene_caption(text, self.theme["caption"])
+
+
+def scene_caption(text, color=MUTED):
+    """The one caption style of the app: small, bold, capital letters."""
+    label = Label(text=str(text).upper(), color=color, font_size=sp(11.5), bold=True,
+                  size_hint_y=None, height=dp(20), halign="left", valign="middle")
+    label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align
+    return label
+
+
+def primary_action(text, on_release):
+    """The big main button under a scene ('+ Add Item', '+ New recipe') - the same on every tab."""
+    return SoftButton(text, height=dp(54), font_size=sp(18), on_release=lambda *_: on_release())
+
+
+def thumb_status(match):
+    """The ONE most important fact about a recipe for a thumbnail: (text, hex colour)."""
+    if match.uses_expiring_today:
+        return "Use today", HEX_RED
+    if not match.appliance_ok:
+        return "Needs " + " or ".join(match.recipe.appliances), HEX_GREY
+    if match.missing:
+        return f"Missing {len(match.missing)}", HEX_AMBER
+    return "Ready to cook", HEX_GREEN
+
+
+class RecipeThumb(TapCard):
+    """A recipe as a thumbnail: square picture, its name (2 lines) and one status line."""
+
+    def __init__(self, match, on_open, width=None, **kwargs):
+        super().__init__(padding=dp(6), spacing=dp(4), radius=dp(18), **kwargs)
+        if width:                                        # fixed width inside a sideways strip
+            self.size_hint_x = None
+            self.width = width
+        recipe = match.recipe
+        picture = RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(14),
+                             size_hint_y=None, height=(width or dp(152)) - dp(12))
+        self.bind(width=lambda *_: setattr(picture, "height", self.width - dp(12)))   # always square
+        self.add_widget(picture)
+        name = Label(text=f"[b]{escape(recipe.name)}[/b]", markup=True, color=INK, font_size=sp(13.5),
+                     size_hint_y=None, height=dp(36), halign="left", valign="top",
+                     max_lines=2, shorten=True, shorten_from="right", padding=(dp(4), 0))
+        name.bind(size=lambda l, s: setattr(l, "text_size", s))   # wrap inside the card
+        self.add_widget(name)
+        text, hex_color = thumb_status(match)
+        info = Label(text=f"[color={hex_color}][b]{escape(text)}[/b][/color]  [color={HEX_GREY}]"
+                          f"{recipe.prep_minutes} min[/color]", markup=True, font_size=sp(11.5),
+                     size_hint_y=None, height=dp(18), halign="left", valign="middle",
+                     shorten=True, padding=(dp(4), 0))
+        info.bind(size=lambda l, s: setattr(l, "text_size", s))
+        self.add_widget(info)
         self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists

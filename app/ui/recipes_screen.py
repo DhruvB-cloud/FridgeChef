@@ -12,8 +12,9 @@ WHY THIS FILE EXISTS:
     * OFFLINE -> (no data / server off) the same matching runs on the phone using its local copy.
     Your own recipes live only on the phone, so they are matched locally and merged into the list.
 
-    Layout: on a phone, "Recommended" is a horizontal strip of picture cards above the full list;
-    on a wide screen (tablet/PC) Recommended and All recipes are two side-by-side columns.
+    Layout (version 4.2): the tab is the KITCHEN. Recipes are thumbnails lying on an oak-wood
+    counter - "Recommended for <meal>" as a sideways strip, then all recipes as a grid
+    (2 columns on a phone, more on wider screens). The counter stays put; the thumbnails scroll.
 """
 
 from datetime import date, datetime
@@ -31,15 +32,15 @@ from app.meal_time import current_meal
 from app.models import CUISINES, NUTRITION_TAGS, SORT_OPTIONS
 from app.recipe_engine import filter_matches, match_all, recommend, sort_matches
 from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
-                            PRIMARY_SOFT, Card, Chip, Header, RecipeCard, RecipeTile, SoftInput,
-                            SoftSpinner, SoftToggle, WrapLabel, bg_rect, colored, labeled,
-                            scroll_list, section_title)
+                            PRIMARY_SOFT, Card, Chip, Header, RecipeThumb, Scene, SoftInput,
+                            SoftSpinner, SoftToggle, WrapLabel, colored, labeled, scroll_list)
 
 # Drop-down label -> value understood by recipe_engine.filter_matches().
 DIET_OPTIONS = {"All diets": "All", "Veg only": "Veg", "Non-veg only": "Non-Veg"}
 TIME_OPTIONS = {"Any time": None, "Up to 15 min": 15, "Up to 30 min": 30, "Up to 60 min": 60}
 ANY_NUTRITION, ANY_CUISINE = "Any nutrition", "All cuisines"
-WIDE_WIDTH = dp(700)          # from this width on, show two columns instead of a strip
+THUMB_WIDTH = dp(160)         # about this wide per thumbnail -> number of grid columns
+STRIP_THUMB = dp(148)         # width of a thumbnail in the Recommended strip
 
 
 class RecipesScreen(Screen):
@@ -50,13 +51,13 @@ class RecipesScreen(Screen):
         self.app = app
         self.request_id = 0              # increases with every request; stale answers are ignored
         self.state = None                # last results: dict(meal, recommended, results, online)
-        self.wide = None                 # current layout mode (None = not decided yet)
+        self.cols = None                 # thumbnails per grid row (None = not decided yet)
         # A "trigger" runs refresh() once, 0.35 s after the LAST call - so typing "paneer" sends
         # one request instead of six.
         self.refresh_soon = Clock.create_trigger(lambda dt: self.refresh(), 0.35)
 
         root = BoxLayout(orientation="vertical")
-        self.header = Header("What's cooking?", "Finding recipes for your fridge...")
+        self.header = Header("What's cooking?", "Finding recipes for your fridge...", icon="tab_recipes")
         self.status_chip = Chip("...", NEUTRAL, MUTED)
         self.header.set_right(self.status_chip, dp(78))
         root.add_widget(self.header)
@@ -95,10 +96,11 @@ class RecipesScreen(Screen):
         self.banner.bind(minimum_height=self.banner.setter("height"))
         self.body.add_widget(self.banner)
 
-        # ---------- results area (filled by _render)
-        self.content = BoxLayout()
+        # ---------- results area: the oak kitchen counter (filled by _render)
+        self.scene = Scene("kitchen")
+        self.content = self.scene.inner
         self.content.bind(size=self._maybe_relayout)
-        self.body.add_widget(self.content)
+        self.body.add_widget(self.scene)
         root.add_widget(self.body)
         self.add_widget(root)
 
@@ -215,10 +217,10 @@ class RecipesScreen(Screen):
 
     # ------------------------------------------------------------------ drawing results
     def _maybe_relayout(self, *_):
-        """Switch between phone layout and wide layout when the window size crosses the limit."""
-        wide = self.content.width >= WIDE_WIDTH
-        if wide != self.wide:
-            self.wide = wide
+        """Re-draw when the window gets wide/narrow enough for a different number of columns."""
+        cols = max(2, int(self.content.width // THUMB_WIDTH))
+        if cols != self.cols:
+            self.cols = cols
             self._render()
 
     @staticmethod
@@ -229,68 +231,49 @@ class RecipesScreen(Screen):
                       tuple(m.uses_expiring_soon)) for m in matches)
 
     def _render(self):
-        if self.state is None:
+        if self.state is None or self.cols is None:
             return
         s = self.state
         people = "1 person" if s["servings"] == 1 else f"{s['servings']} people"
-        source = "live from server" if s["online"] else "offline - saved on this phone"
+        source = "live recipes" if s["online"] else "offline recipes"
         self.header.set_subtitle(f"For {people} • {source}")
         # Version 4.0.1: rebuilding ~30 cards while you scroll interrupted the swipe and jumped back
         # to the top. If the new answer looks exactly like what is on screen, keep the screen as it is.
-        shown = (self.wide, s["meal"], self._fingerprint(s["recommended"]), self._fingerprint(s["results"]))
+        shown = (self.cols, s["meal"], self._fingerprint(s["recommended"]), self._fingerprint(s["results"]))
         if shown == getattr(self, "_shown", None):
             return
         self._shown = shown
         old_scroll = [w.scroll_y for w in self.content.walk() if isinstance(w, ScrollView) and w.do_scroll_y]
         self.content.clear_widgets()
         open_recipe = self.app.open_recipe
-        rec_title = f"Recommended for {s['meal']}"
-        all_title = f"All recipes ({len(s['results'])})"
-        empty_rec = WrapLabel(text=f"No {s['meal'].lower()} dishes match your fridge yet.",
-                              color=MUTED, font_size=sp(14))
+        caption = self.scene.caption                     # the shared caption style, in dark oak
 
-        if self.wide:                                    # ---- two columns side by side
-            columns = BoxLayout(spacing=dp(14))
-            left = BoxLayout(orientation="vertical", size_hint_x=0.42, padding=dp(10), spacing=dp(8))
-            bg_rect(left, PRIMARY_SOFT, radius=dp(22))
-            left.add_widget(section_title(rec_title))
-            scroll, inner = scroll_list()
-            for m in s["recommended"]:
-                inner.add_widget(RecipeTile(m, on_open=open_recipe))
-            if not s["recommended"]:
-                inner.add_widget(empty_rec)
-            left.add_widget(scroll)
-            right = BoxLayout(orientation="vertical", size_hint_x=0.58, spacing=dp(8), padding=(0, dp(10), 0, 0))
-            right.add_widget(section_title(all_title))
-            scroll2, inner2 = scroll_list(padding=(0, 0, 0, dp(10)))
-            self._fill_all(inner2, s["results"])
-            right.add_widget(scroll2)
-            columns.add_widget(left)
-            columns.add_widget(right)
-            self.content.add_widget(columns)
-            return
-
-        # ---- phone: one scrolling page with a horizontal Recommended strip on top
-        scroll, inner = scroll_list(padding=(0, dp(2), 0, dp(14)))
-        inner.add_widget(section_title(rec_title))
+        scroll, inner = scroll_list(spacing=dp(8), padding=(0, 0, 0, dp(8)))
+        # ---- "Recommended for Lunch": a sideways strip of thumbnails
+        inner.add_widget(caption(f"Recommended for {s['meal']}"))
         if s["recommended"]:
-            strip = SideScroller(size_hint_y=None, height=dp(232))   # lets up/down swipes scroll the page
-            row = BoxLayout(size_hint_x=None, spacing=dp(12), padding=(dp(2), dp(4), dp(2), dp(6)))
-            row.bind(minimum_width=row.setter("width"))  # row grows sideways with its cards
+            strip = SideScroller(size_hint_y=None, height=STRIP_THUMB + dp(70))   # up/down swipes scroll the page
+            row = BoxLayout(size_hint_x=None, spacing=dp(10), padding=(0, dp(2), 0, dp(6)))
+            row.bind(minimum_width=row.setter("width"))  # row grows sideways with its thumbnails
             for m in s["recommended"]:
-                row.add_widget(RecipeCard(m, on_open=open_recipe, width=dp(168), pos_hint={"top": 1}))
+                row.add_widget(RecipeThumb(m, on_open=open_recipe, width=STRIP_THUMB, pos_hint={"top": 1}))
             strip.add_widget(row)
             inner.add_widget(strip)
         else:
-            inner.add_widget(empty_rec)
-        inner.add_widget(section_title(all_title))
-        self._fill_all(inner, s["results"])
+            inner.add_widget(self._note(f"No {s['meal'].lower()} dishes match your fridge yet."))
+        # ---- every recipe, as a grid of thumbnails
+        inner.add_widget(caption(f"All recipes ({len(s['results'])})"))
+        if not s["results"]:
+            inner.add_widget(self._note("No recipes match these filters."))
+        grid = GridLayout(cols=self.cols, spacing=dp(10), size_hint_y=None)
+        grid.bind(minimum_height=grid.setter("height"))
+        for m in s["results"]:
+            grid.add_widget(RecipeThumb(m, on_open=open_recipe))
+        inner.add_widget(grid)
         self.content.add_widget(scroll)
         if old_scroll:                                   # stay where you were (don't jump to the top)
             Clock.schedule_once(lambda dt: setattr(scroll, "scroll_y", old_scroll[0]), 0)
 
-    def _fill_all(self, layout, results):
-        if not results:
-            layout.add_widget(WrapLabel(text="No recipes match these filters.", color=MUTED, font_size=sp(14)))
-        for m in results:
-            layout.add_widget(RecipeTile(m, on_open=self.app.open_recipe))
+    def _note(self, text):
+        """A short message written on the counter (e.g. 'No recipes match these filters.')."""
+        return WrapLabel(text=text, color=self.scene.theme["caption"], font_size=sp(14))

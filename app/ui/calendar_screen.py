@@ -15,7 +15,7 @@ import calendar                                  # Python's built-in calendar ma
 import os                                        # check that a photo file still exists
 from datetime import date, datetime
 
-from kivy.graphics import Color, Line
+from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -29,8 +29,10 @@ from app.dates import format_date                # dd-mm-yyyy
 from app.images import resolve_image
 from app.ui.cooked_popup import attach_photo     # "Add photo" for a calendar entry
 from app.ui.widgets import (PEACH_SOFT, INK, MUTED, NEUTRAL, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, SURFACE, WHITE,
-                            Card, Header, RoundImage, SoftButton, TapCard, WrapLabel, bg_rect,
+                            Card, Header, RoundImage, Scene, SoftButton, TapCard, WrapLabel, bg_rect,
                             escape, scroll_list, section_title)
+
+PAPER_CARD = (0.965, 0.972, 0.958, 1)            # light grey-green cards on the white calendar paper
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -88,11 +90,26 @@ class CalendarScreen(Screen):
         self.year, self.month = today.year, today.month   # month being shown
         self.selected = today                             # day whose dishes are listed
         root = BoxLayout(orientation="vertical")
-        self.header = Header("Cooking calendar", "")
+        self.header = Header("Cooking calendar", "", icon="tab_calendar")
         root.add_widget(self.header)
-        scroll, self.content = scroll_list(spacing=dp(14), padding=(dp(16), dp(4), dp(16), dp(20)))
-        root.add_widget(scroll)
+        # A paper wall calendar (the same scene frame as every other tab), hanging on two rings.
+        body = BoxLayout(padding=(dp(16), dp(4), dp(16), dp(8)))
+        self.scene = Scene("calendar")
+        with self.scene.canvas.after:
+            Color(0.42, 0.47, 0.44, 1)
+            self._rings = [RoundedRectangle(radius=[dp(4)]) for _ in range(2)]
+        self.scene.bind(pos=self._draw_rings, size=self._draw_rings)
+        scroll, self.content = scroll_list(spacing=dp(12), padding=(0, dp(10), 0, dp(10)))
+        self.scene.inner.add_widget(scroll)
+        body.add_widget(self.scene)
+        root.add_widget(body)
         self.add_widget(root)
+
+    def _draw_rings(self, *_):
+        """Two dark binder rings across the top edge of the calendar."""
+        for ring, share in zip(self._rings, (0.3, 0.7)):
+            ring.pos = (self.scene.x + self.scene.width * share - dp(5), self.scene.top - dp(18))
+            ring.size = (dp(10), dp(26))
 
     def on_pre_enter(self, *_):
         self.refresh()
@@ -123,7 +140,8 @@ class CalendarScreen(Screen):
 
         c = self.content
         c.clear_widgets()
-        card = Card(spacing=dp(10))
+        card = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)   # straight on the paper
+        card.bind(minimum_height=card.setter("height"))
         # --- month switcher:  <   October 2026   >
         nav = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
         nav.add_widget(SoftButton("<", size_hint=(None, None), size=(dp(44), dp(44)), bg=NEUTRAL,
@@ -160,9 +178,9 @@ class CalendarScreen(Screen):
             entries = db.cook_log(self.selected, self.selected)   # selected day is in another month
         weekday_and_date = f"{self.selected.strftime('%A')}, {format_date(self.selected)}"   # "Sunday, 04-10-2026"
         label = f"Today, {format_date(today)}" if self.selected == today else weekday_and_date
-        c.add_widget(section_title(label))
+        c.add_widget(self.scene.caption(label))
         if not entries:
-            empty = Card(shadow=False)
+            empty = Card(color=PAPER_CARD, shadow=False)
             empty.add_widget(WrapLabel(text="Nothing cooked on this day.", color=MUTED, font_size=sp(14)))
             c.add_widget(empty)
             return
@@ -171,7 +189,7 @@ class CalendarScreen(Screen):
 
     def _entry_row(self, entry):
         """A card for one cooked dish: picture, name, time, servings, and your photo (if any)."""
-        card = TapCard(spacing=dp(10), padding=dp(10))
+        card = TapCard(color=PAPER_CARD, shadow=False, spacing=dp(10), padding=dp(10))
         row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(12))
         holder = BoxLayout(size_hint=(None, None), size=(dp(56), dp(56)))
         holder.add_widget(RoundImage(resolve_image(entry["image_path"], small=True), radius=dp(14)))   # recipe picture

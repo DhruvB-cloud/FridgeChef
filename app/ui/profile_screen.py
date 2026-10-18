@@ -26,7 +26,7 @@ from app.images import resolve_image
 from app.meal_time import current_meal
 from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
 from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT, PRIMARY,
-                            PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, SoftButton,
+                            PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, Scene, SoftButton,
                             SoftInput, SoftToggle, TapCard, WrapLabel, escape, icon_image, labeled,
                             scroll_list, section_title)
 
@@ -65,9 +65,14 @@ class ProfileScreen(Screen):
         super().__init__(**kwargs)
         self.app = app
         root = BoxLayout(orientation="vertical")
-        root.add_widget(Header("Profile", "Your cooking journey"))
-        scroll, self.content = scroll_list(spacing=dp(14), padding=(dp(16), dp(4), dp(16), dp(24)))
-        root.add_widget(scroll)
+        root.add_widget(Header("Profile", "Your cooking journey", icon="tab_profile"))
+        # The "chef's corner" scene (same frame as every other tab); the cards scroll inside it.
+        body = BoxLayout(padding=(dp(16), dp(4), dp(16), dp(8)))
+        scene = Scene("profile")
+        scroll, self.content = scroll_list(spacing=dp(14), padding=(dp(2), dp(4), dp(2), dp(12)))
+        scene.inner.add_widget(scroll)
+        body.add_widget(scene)
+        root.add_widget(body)
         self.add_widget(root)
         # Save the name 0.6 s after the user stops typing (instead of on every key).
         self._save_name = Clock.create_trigger(lambda dt: self.app.db.set_setting("user_name", self.name_in.text.strip()), 0.6)
