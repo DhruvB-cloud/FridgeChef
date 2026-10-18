@@ -166,6 +166,44 @@ class Version4Test(unittest.TestCase):
                              [f"recipe_card_1_{i}.png" for i in range(3, 8)])   # newest 5 kept
 
 
+class Version41Test(unittest.TestCase):
+    """Version 4.1: items are drawn as a bottle, glass jar or dish in the fridge picture."""
+
+    def test_container_guess(self):
+        from app.models import guess_container
+        self.assertEqual(guess_container("Soy sauce", "ml"), "bottle")      # liquids -> bottle
+        self.assertEqual(guess_container("Milk", "l"), "bottle")
+        self.assertEqual(guess_container("Leftover dal", "cup"), "dish")    # cooked food -> dish
+        self.assertEqual(guess_container("Rice (cooked)", "g"), "dish")
+        self.assertEqual(guess_container("Rice (uncooked)", "g"), "jar")    # "uncooked" is not "cooked"
+        self.assertEqual(guess_container("Onion", "pcs"), "jar")            # everything else -> jar
+
+    def test_container_saved_and_old_files_upgraded(self):
+        import sqlite3
+        from app.database import Database
+        from app.models import PantryItem
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "old.db")
+            old = sqlite3.connect(path)                                  # a 4.0 file: no container column
+            old.execute("CREATE TABLE pantry_items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+                        "category TEXT NOT NULL DEFAULT 'Fridge', quantity REAL NOT NULL, unit TEXT NOT NULL, "
+                        "expiry TEXT, added_on TEXT NOT NULL)")
+            old.execute("INSERT INTO pantry_items(name, quantity, unit, added_on) "
+                        "VALUES ('Ketchup', 500, 'ml', '2026-01-01')")
+            old.commit()
+            old.close()
+            db = Database(path)                                          # opening adds the column
+            ketchup = db.list_pantry()[0]
+            self.assertIsNone(ketchup.container)                         # nothing chosen yet...
+            self.assertEqual(ketchup.kept_in(), "bottle")                # ...so it is guessed
+            ketchup.container = "jar"                                    # the user picks a jar
+            db.update_pantry_item(ketchup)
+            db.add_pantry_item(PantryItem("Dal", 1, "cup", container="dish"))
+            kinds = {i.name: i.kept_in() for i in db.list_pantry()}
+            self.assertEqual(kinds, {"Ketchup": "jar", "Dal": "dish"})
+            db.close()
+
+
 class SchemaTest(unittest.TestCase):
     def test_recipe_round_trip(self):
         original = SEED_RECIPES[0]

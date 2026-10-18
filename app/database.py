@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS pantry_items (
     quantity    REAL    NOT NULL,                    -- how much is left
     unit        TEXT    NOT NULL,                    -- g / kg / ml / l / pcs ...
     expiry      TEXT,                                -- ISO date 'YYYY-MM-DD' or NULL
-    added_on    TEXT    NOT NULL                     -- when the user added it
+    added_on    TEXT    NOT NULL,                    -- when the user added it
+    container   TEXT                                 -- 'bottle', 'jar', 'dish' or NULL (= guess)
 );
 CREATE TABLE IF NOT EXISTS appliances (
     name        TEXT PRIMARY KEY,                    -- 'Stove', 'Oven' ...
@@ -94,6 +95,7 @@ MIGRATIONS = {
     "recipes": [("uid", "TEXT"), ("protein_g", "REAL NOT NULL DEFAULT 0"),
                 ("carbs_g", "REAL NOT NULL DEFAULT 0"), ("calories", "REAL NOT NULL DEFAULT 0")],
     "cook_log": [("recipe_name", "TEXT"), ("photo_path", "TEXT")],   # photo_path: version 4
+    "pantry_items": [("container", "TEXT")],                         # bottle / jar / dish: version 4.1
 }
 
 
@@ -171,6 +173,7 @@ class Database:
             unit=row["unit"],
             # Stored as text 'YYYY-MM-DD'; turn it back into a date object (or keep None).
             expiry=date.fromisoformat(row["expiry"]) if row["expiry"] else None,
+            container=row["container"],                    # None for items saved before version 4.1
         )
 
     def list_pantry(self):
@@ -184,10 +187,11 @@ class Database:
     def add_pantry_item(self, item):
         """Insert a new pantry item and return its new id."""
         cur = self.conn.execute(
-            "INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on) "
-            "VALUES (?, ?, ?, ?, ?, ?)",                   # '?' placeholders prevent SQL injection
+            "INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on, container) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",                # '?' placeholders prevent SQL injection
             (item.name.strip(), item.category, float(item.quantity), item.unit,
-             item.expiry.isoformat() if item.expiry else None, datetime.now().isoformat()),
+             item.expiry.isoformat() if item.expiry else None, datetime.now().isoformat(),
+             item.container),
         )
         self.conn.commit()                                 # write to disk immediately
         item.id = cur.lastrowid                            # the id SQLite just generated
@@ -196,9 +200,10 @@ class Database:
     def update_pantry_item(self, item):
         """Overwrite an existing pantry item (used by the Edit popup)."""
         self.conn.execute(
-            "UPDATE pantry_items SET name=?, category=?, quantity=?, unit=?, expiry=? WHERE id=?",
+            "UPDATE pantry_items SET name=?, category=?, quantity=?, unit=?, expiry=?, container=? "
+            "WHERE id=?",
             (item.name.strip(), item.category, float(item.quantity), item.unit,
-             item.expiry.isoformat() if item.expiry else None, item.id),
+             item.expiry.isoformat() if item.expiry else None, item.container, item.id),
         )
         self.conn.commit()
 

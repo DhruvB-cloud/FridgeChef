@@ -28,6 +28,14 @@ APPLIANCES = ["Stove", "Rice Cooker", "Oven", "Microwave"]
 # Where a pantry item lives - only used for grouping in the Fridge screen.
 CATEGORIES = ["Fridge", "Outside"]   # "Outside" = cupboard / shelf, i.e. not refrigerated
 
+# What an item is kept in - decides its picture and its place in the fridge drawing (version 4.1):
+#   jar    -> on the shelves      bottle -> in the door rack      dish -> on the leftovers shelf
+CONTAINERS = ["bottle", "jar", "dish"]
+CONTAINER_LABELS = {"bottle": "Bottle", "jar": "Glass jar", "dish": "Dish"}   # names shown in the form
+
+# Words that mean "cooked food", so the item is probably kept in a dish.
+DISH_WORDS = ("leftover", "cooked", "curry", "dal", "sabzi", "biryani", "pulao", "soup", "stew")
+
 # Ways the recipe list can be sorted (the "Sort" drop-down on the Recipes tab).
 SORT_OPTIONS = ["Best match", "Most protein", "Least carbs", "Most carbs", "Fewest calories", "Quickest"]
 
@@ -41,6 +49,20 @@ def slugify(text):
     return text.strip("-") or "recipe"                      # no leading/trailing dashes
 
 
+def guess_container(name, unit):
+    """A sensible first choice for the container picker (the user can always change it).
+
+    "Leftover dal" -> dish, "Soy sauce" in ml -> bottle, everything else -> jar.
+    Also used for items saved before version 4.1, which have no container yet.
+    """
+    words = re.findall(r"[a-z]+", str(name).lower())        # "Rice (uncooked)" -> ["rice", "uncooked"]
+    if any(word in DISH_WORDS for word in words):           # whole words only: "uncooked" is not "cooked"
+        return "dish"
+    if unit in ("ml", "l"):                                 # liquids
+        return "bottle"
+    return "jar"
+
+
 @dataclass
 class PantryItem:
     """One thing the user owns, e.g. '500 g Curd, in the Fridge, expires 2026-10-06'."""
@@ -50,6 +72,11 @@ class PantryItem:
     category: str = "Fridge"           # "Fridge" or "Outside"
     expiry: Optional[date] = None      # None means "does not expire" (e.g. salt)
     id: Optional[int] = None           # database primary key (None until saved)
+    container: Optional[str] = None    # "bottle" / "jar" / "dish" (None = guess from name and unit)
+
+    def kept_in(self):
+        """The container to draw: the user's choice, or a guess for older items."""
+        return self.container if self.container in CONTAINERS else guess_container(self.name, self.unit)
 
     def days_left(self, today=None):
         """Days until expiry: 0 = expires today, negative = already expired, None = never."""

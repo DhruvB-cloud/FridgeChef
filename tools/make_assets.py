@@ -11,6 +11,7 @@ WHY THIS FILE EXISTS:
     so phones never need the font - this script is NOT part of the app itself.
 
 RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
+ONLY THE JAR / BOTTLE / DISH ICONS: .\.venv\Scripts\python tools\make_assets.py containers
 """
 
 import os
@@ -185,7 +186,87 @@ def make_icon(char, out_path, size=128):
     icon.save(out_path, "PNG")
 
 
+def _icon_canvas(size):
+    """A transparent square, 4x bigger than the final icon (shrinking it later smooths the edges)."""
+    big = Image.new("RGBA", (size * 4, size * 4), (0, 0, 0, 0))
+    return big, ImageDraw.Draw(big), size * 4 / 256          # k: scale factor for a 256-unit design
+
+
+def _finish_icon(big, size, out_path, shadow_box):
+    """Add a soft shadow under the drawing, shrink to `size` and save."""
+    shadow = soft_shadow(big.size, shadow_box, 10 * big.size[0] / 256, 70)   # blurred ellipse
+    base = Image.new("RGBA", big.size, (0, 0, 0, 0))
+    base.paste((20, 40, 70, 255), (0, 0), shadow)              # dark blue-grey shadow...
+    base.alpha_composite(big)                                  # ...with the drawing on top
+    base.resize((size, size), Image.LANCZOS).save(out_path, "PNG")
+
+
+def make_jar_icon(out_path, size=256):
+    """A glass jar with a golden lid and a cream label (pickles, rice, spices...)."""
+    big, d, k = _icon_canvas(size)
+    s = lambda *v: [round(x * k) for x in v]                   # design units (0-256) -> pixels
+    d.rounded_rectangle(s(44, 76, 212, 238), radius=round(36 * k), fill=(224, 240, 250, 255),
+                        outline=(160, 196, 222, 255), width=round(5 * k))       # glass body
+    d.rectangle(s(70, 64, 186, 82), fill=(206, 226, 240, 255))                  # neck of the jar
+    d.rounded_rectangle(s(58, 26, 198, 66), radius=round(10 * k), fill=(242, 184, 75, 255))   # lid
+    for x in (84, 110, 136, 162):                                               # ridges on the lid
+        d.line(s(x, 32, x, 60), fill=(214, 152, 52, 255), width=round(4 * k))
+    d.rounded_rectangle(s(62, 120, 194, 196), radius=round(10 * k), fill=(255, 248, 232, 255),
+                        outline=(232, 214, 186, 255), width=round(3 * k))       # paper label
+    d.rounded_rectangle(s(56, 92, 70, 222), radius=round(7 * k), fill=(255, 255, 255, 190))   # shine
+    _finish_icon(big, size, out_path, s(40, 222, 216, 252))
+
+
+def make_bottle_icon(out_path, size=256):
+    """A brown glass bottle with a red cap and a label (sauces, oil, milk, water...)."""
+    big, d, k = _icon_canvas(size)
+    s = lambda *v: [round(x * k) for x in v]
+    glass, dark = (205, 128, 62, 255), (172, 100, 44, 255)                       # amber glass
+    d.rounded_rectangle(s(80, 100, 176, 244), radius=round(26 * k), fill=glass)  # body
+    d.polygon([tuple(s(112, 56)), tuple(s(144, 56)), tuple(s(176, 118)), tuple(s(80, 118))],
+              fill=glass)                                                       # sloping shoulders
+    d.rectangle(s(112, 36, 144, 70), fill=glass)                                # neck
+    d.rounded_rectangle(s(106, 10, 150, 42), radius=round(8 * k), fill=(214, 92, 80, 255))   # cap
+    d.rectangle(s(106, 34, 150, 42), fill=(186, 70, 62, 255))                   # cap's lower ring
+    d.rounded_rectangle(s(92, 108, 104, 232), radius=round(6 * k), fill=(255, 255, 255, 120))  # shine (under the label)
+    d.rectangle(s(80, 140, 176, 204), fill=(255, 248, 232, 255))                # paper label
+    d.line(s(80, 140, 176, 140), fill=dark, width=round(3 * k))                 # label edges
+    d.line(s(80, 204, 176, 204), fill=dark, width=round(3 * k))
+    _finish_icon(big, size, out_path, s(78, 230, 178, 254))
+
+
+def make_dish_icon(out_path, size=256):
+    """A bowl of food under a clear lid (leftovers, cooked rice, curries...)."""
+    big, d, k = _icon_canvas(size)
+    s = lambda *v: [round(x * k) for x in v]
+    d.chord(s(48, 52, 208, 196), 180, 360, fill=(214, 234, 250, 170),
+            outline=(150, 190, 222, 255), width=round(4 * k))                   # clear, slightly blue dome lid
+    d.ellipse(s(116, 40, 140, 60), fill=(150, 190, 222, 255))                   # knob on the lid
+    d.ellipse(s(40, 106, 216, 146), fill=(226, 140, 72, 255))                   # food (curry colour)
+    for x, y in ((88, 116), (128, 112), (160, 122), (108, 128)):                # green garnish
+        d.ellipse(s(x, y, x + 12, y + 9), fill=(110, 170, 90, 255))
+    # The bowl: the lower half of an ellipse, with a peach stripe painted inside its shape.
+    bowl = Image.new("L", big.size, 0)
+    ImageDraw.Draw(bowl).chord(s(28, 30, 228, 230), 0, 180, fill=255)           # bowl outline as a mask
+    body = Image.new("RGBA", big.size, (255, 250, 242, 255))                    # cream china
+    ImageDraw.Draw(body).rectangle(s(0, 160, 256, 178), fill=(245, 168, 135, 255))   # peach stripe
+    big.paste(body, (0, 0), bowl)
+    d.line(s(28, 130, 228, 130), fill=(236, 224, 210, 255), width=round(4 * k))      # bowl rim
+    _finish_icon(big, size, out_path, s(50, 214, 206, 242))
+
+
+def make_container_icons():
+    """The three pictures a fridge item can be shown as (chosen in the Add item form)."""
+    make_jar_icon(os.path.join(ICONS_DIR, "container_jar.png"))
+    make_bottle_icon(os.path.join(ICONS_DIR, "container_bottle.png"))
+    make_dish_icon(os.path.join(ICONS_DIR, "container_dish.png"))
+    print("container icons -> assets/icons/container_*.png")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only redraw these 3
+        make_container_icons()
+        sys.exit()
     os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
     os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
@@ -199,6 +280,7 @@ if __name__ == "__main__":
     for name, char in ICONS.items():
         make_icon(char, os.path.join(ICONS_DIR, f"{name}.png"))
         print("icon:", name)
+    make_container_icons()
     make_ui_shapes()
     make_app_icon(os.path.join(os.path.dirname(ICONS_DIR), "app_icon.png"))   # assets/app_icon.png
     print("app icon -> assets/app_icon.png")

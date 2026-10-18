@@ -20,7 +20,7 @@ source.include_exts = py,png,jpg,jpeg,ttf
 # The assets/ folder (recipe pictures, icons, rounded UI shapes) IS included.
 source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs
 # App version shown in Android settings.
-version = 4.0.1
+version = 4.1.0
 # Python packages bundled into the APK:
 #   pyjnius  - lets Python call Android Java APIs (share sheet, gallery)
 #   sqlite3  - the local database (on Android it is only built when listed here)
