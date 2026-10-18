@@ -120,8 +120,9 @@ class FridgeChefApp(App):
         root.add_widget(self._build_nav_bar())     # ...above the bottom tab bar
 
         Window.bind(on_keyboard=self._on_key)      # catch the Android back button / Esc key
-        # First-time users (empty fridge) start on the Fridge tab, everyone else on Recipes.
-        self.navigate("recipes" if self.db.list_pantry() else "pantry", from_tab=True)
+        # First-time users (nothing but the built-in Water) start on the Fridge tab, everyone else on Recipes.
+        has_food = any(not item.is_water for item in self.db.list_pantry())
+        self.navigate("recipes" if has_food else "pantry", from_tab=True)
         return root                                # Kivy shows whatever build() returns
 
     def on_start(self):

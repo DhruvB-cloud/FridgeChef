@@ -150,7 +150,7 @@ class DatabaseTest(unittest.TestCase):
             self.assertEqual(expiring_today(db.list_pantry(), TODAY)[0].name, "Curd")
             self.assertIn("Curd expires today", build_message(expiring_today(db.list_pantry(), TODAY)))
             db.apply_deductions([(item_id, 0)])                 # cooking used it all
-            self.assertEqual(db.list_pantry(), [])              # -> removed from the fridge
+            self.assertEqual([i.name for i in db.list_pantry()], ["Water"])   # -> removed (Water always stays)
             r = raita()
             r.is_user = True
             rid = db.add_recipe(r)

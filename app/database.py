@@ -29,7 +29,7 @@ import sqlite3                                # the built-in SQLite driver
 import uuid                                   # random ids for user-created recipes
 from datetime import date, datetime           # for expiry dates and timestamps
 
-from app.models import APPLIANCES, Ingredient, PantryItem, Recipe   # our data shapes
+from app.models import APPLIANCES, UNLIMITED, WATER_NAME, Ingredient, PantryItem, Recipe   # our data shapes
 from app.seed_recipes import SEED_RECIPES                            # the starter recipe library
 
 # SQL that creates every table if it does not exist yet. Running it on every start is safe.
@@ -155,7 +155,23 @@ class Database:
                     "image_path=COALESCE(image_path, ?) WHERE id=?",   # keep an image if one exists
                     (recipe.uid, recipe.protein_g, recipe.carbs_g, recipe.calories,
                      recipe.image_path, row["id"]))
+        self._ensure_water()
         self.conn.commit()                                 # save everything in one go (faster)
+
+    def _ensure_water(self):
+        """Exactly one Water item, always in the fridge: no expiry, unlimited, drawn as a bottle."""
+        rows = self.conn.execute("SELECT id FROM pantry_items WHERE lower(trim(name)) = 'water' "
+                                 "ORDER BY id").fetchall()
+        if not rows:                                       # new database (or an old one without water)
+            self.conn.execute("INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on, "
+                              "container) VALUES (?, 'Fridge', ?, 'l', NULL, ?, 'bottle')",
+                              (WATER_NAME, UNLIMITED, datetime.now().isoformat()))
+            return
+        for row in rows[1:]:                               # water added twice by an older version
+            self.conn.execute("DELETE FROM pantry_items WHERE id=?", (row["id"],))
+        self.conn.execute("UPDATE pantry_items SET name=?, category='Fridge', quantity=?, unit='l', "
+                          "expiry=NULL, container='bottle' WHERE id=?",
+                          (WATER_NAME, UNLIMITED, rows[0]["id"]))
 
     def close(self):
         """Close the connection when the app exits."""

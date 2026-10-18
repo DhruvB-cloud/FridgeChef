@@ -33,6 +33,10 @@ CATEGORIES = ["Fridge", "Outside"]   # "Outside" = cupboard / shelf, i.e. not re
 CONTAINERS = ["bottle", "jar", "dish"]
 CONTAINER_LABELS = {"bottle": "Bottle", "jar": "Glass jar", "dish": "Dish"}   # names shown in the form
 
+# Water is always in the fridge (version 4.1): it never expires, never runs out and can't be removed.
+WATER_NAME = "Water"
+UNLIMITED = 1_000_000.0                # "unlimited" litres - stored as a big number in the database
+
 # Words that mean "cooked food", so the item is probably kept in a dish.
 DISH_WORDS = ("leftover", "cooked", "curry", "dal", "sabzi", "biryani", "pulao", "soup", "stew")
 
@@ -73,6 +77,11 @@ class PantryItem:
     expiry: Optional[date] = None      # None means "does not expire" (e.g. salt)
     id: Optional[int] = None           # database primary key (None until saved)
     container: Optional[str] = None    # "bottle" / "jar" / "dish" (None = guess from name and unit)
+
+    @property
+    def is_water(self):
+        """True for the built-in Water item."""
+        return self.name.strip().lower() == WATER_NAME.lower()
 
     def kept_in(self):
         """The container to draw: the user's choice, or a guess for older items."""

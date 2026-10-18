@@ -200,7 +200,43 @@ class Version41Test(unittest.TestCase):
             db.update_pantry_item(ketchup)
             db.add_pantry_item(PantryItem("Dal", 1, "cup", container="dish"))
             kinds = {i.name: i.kept_in() for i in db.list_pantry()}
-            self.assertEqual(kinds, {"Ketchup": "jar", "Dal": "dish"})
+            self.assertEqual(kinds, {"Ketchup": "jar", "Dal": "dish", "Water": "bottle"})
+            db.close()
+
+    def test_water_is_always_there(self):
+        from app.database import Database
+        from app.models import UNLIMITED
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "x.db")
+            db = Database(path)
+            water = [i for i in db.list_pantry() if i.is_water]
+            self.assertEqual(len(water), 1)                             # added automatically
+            self.assertIsNone(water[0].expiry)                          # never expires
+            self.assertEqual(water[0].quantity, UNLIMITED)              # never runs out
+            db.conn.execute("INSERT INTO pantry_items(name, quantity, unit, expiry, added_on) "
+                            "VALUES ('water', 2, 'l', '2026-01-01', '2026-01-01')")   # a second, dated one
+            db.conn.commit()
+            db.close()
+            db = Database(path)                                          # re-open -> tidied up
+            water = [i for i in db.list_pantry() if i.is_water]
+            self.assertEqual(len(water), 1)
+            self.assertIsNone(water[0].expiry)
+            db.close()
+
+    def test_same_name_items_stay_separate_and_soonest_is_used_first(self):
+        from app.database import Database
+        from app.models import Ingredient, PantryItem, Recipe
+        from app.recipe_engine import plan_deduction
+        with tempfile.TemporaryDirectory() as folder:
+            db = Database(os.path.join(folder, "x.db"))
+            db.add_pantry_item(PantryItem("Milk", 1, "l", expiry=TODAY + timedelta(days=7)))
+            db.add_pantry_item(PantryItem("Milk", 1, "l", expiry=TODAY + timedelta(days=1)))
+            milks = [i for i in db.list_pantry() if i.name == "Milk"]
+            self.assertEqual(len(milks), 2)                             # two separate items
+            tea = Recipe("Chai", "Indian", True, 5, 1, ingredients=[Ingredient("milk", 1, "l")])
+            changes, _ = plan_deduction(tea, db.list_pantry(), 1, today=TODAY)
+            soonest = min(milks, key=lambda i: i.expiry)
+            self.assertEqual(changes, [(soonest.id, 0)])                # tomorrow's milk is used up
             db.close()
 
 

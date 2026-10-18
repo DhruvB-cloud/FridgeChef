@@ -48,6 +48,18 @@ def cache_dir():
     return _cache_dir
 
 
+# The bottle / jar / dish pictures of the Fridge tab, in "design units" (like pixels, y = 0 at the TOP).
+#   size  - width and height of the picture
+#   label - (left, top, right, bottom) of the cream label where the app writes the item's name
+# tools/make_assets.py draws the pictures from these numbers and the app places the name with them,
+# so the two always agree.
+CONTAINER_ART = {
+    "jar": {"size": (300, 256), "label": (54, 108, 250, 206)},
+    "bottle": {"size": (200, 300), "label": (30, 150, 170, 250)},
+    "dish": {"size": (300, 256), "label": (62, 144, 238, 214)},
+}
+
+
 def icon(name):
     """Full path of a bundled icon, e.g. icon('fire') -> .../assets/icons/fire.png"""
     return os.path.join(ICONS_DIR, f"{name}.png")
