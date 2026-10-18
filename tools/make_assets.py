@@ -14,6 +14,7 @@ RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
 ONLY THE FRIDGE CONTAINER PICTURES: .\.venv\Scripts\python tools\make_assets.py containers
 ONLY THE WOOD / LEATHER TEXTURES:  .\.venv\Scripts\python tools\make_assets.py textures
 ONLY THE SMALL ICONS + APP ICON:    .\.venv\Scripts\python tools\make_assets.py icons
+ONLY THE RECIPE PICTURES:           .\.venv\Scripts\python tools\make_assets.py recipes
 """
 
 import os
@@ -95,8 +96,40 @@ FLUENT_ICONS = {
 }
 
 
+# Version 4.6: every emoji the recipe pictures use, and its Fluent Emoji 3D name, so the recipe
+# pictures are drawn with the same glossy 3D food as the rest of the app.
+FLUENT_FOOD = {
+    "\U0001F373": "Cooking", "\U0001F9C5": "Onion", "\U0001F345": "Tomato", "\U0001F336": "Hot pepper",
+    "\U0001F35A": "Cooked rice", "\U0001F95C": "Peanuts", "\U0001F34B": "Lemon", "\U0001F954": "Potato",
+    "\U0001F9C8": "Butter", "\U0001F33F": "Herb", "\U0001F372": "Pot of food", "\U0001F9C4": "Garlic",
+    "\U0001F952": "Cucumber", "\U0001F963": "Bowl with spoon", "\U0001F958": "Shallow pan of food",
+    "\U0001F9C0": "Cheese wedge", "\U0001FAD1": "Bell pepper", "\U0001F35B": "Curry rice",
+    "\U0001F357": "Poultry leg", "\U0001F955": "Carrot", "\U0001F33D": "Ear of corn", "\U0001F9C6": "Falafel",
+    "\U0001FAD2": "Olive", "\U0001F957": "Green salad", "\U0001F32F": "Burrito", "\U0001F35E": "Bread",
+    "\U0001F34C": "Banana", "\U0001F36F": "Honey pot", "\U0001FAD8": "Beans", "\U0001F34E": "Red apple",
+    "\U0001F95B": "Glass of milk", "\U0001F967": "Pie", "\U0001F969": "Cut of meat", "\U0001F96A": "Sandwich",
+    "\U0001F37D": "Fork and knife with plate",
+}
+_FLUENT_CACHE = {}                                       # name -> downloaded picture (each fetched once)
+
+
 def emoji_image(char, size):
-    """Render one emoji as a transparent RGBA image, cropped tightly and scaled to `size`."""
+    """One emoji as a transparent RGBA image, cropped tightly and scaled to fit `size`.
+
+    Food emojis come from Fluent Emoji 3D (see FLUENT_FOOD); anything else - or a failed
+    download - is drawn with the Windows colour emoji font, as before."""
+    name = FLUENT_FOOD.get(char)
+    if name:
+        try:
+            if name not in _FLUENT_CACHE:
+                _FLUENT_CACHE[name] = _download_fluent(name)
+            glyph = _FLUENT_CACHE[name].copy()
+            glyph = glyph.crop(glyph.getchannel("A").getbbox())          # cut away the empty border
+            scale = size / max(glyph.size)                               # fit inside size x size
+            return glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))),
+                                Image.LANCZOS)
+        except OSError as error:
+            print(f"  (could not download {name}: {error} - using the emoji font)")
     font = ImageFont.truetype(EMOJI_FONT, 256)
     canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
     ImageDraw.Draw(canvas).text((40, 40), char, font=font, embedded_color=True)
@@ -148,6 +181,18 @@ def make_recipe_image(recipe, out_path):
         img.alpha_composite(g, (x, y))
 
     img.convert("RGB").save(out_path, "JPEG", quality=88)
+
+
+def make_recipe_pictures():
+    """The picture of every built-in recipe (800 px) plus a 256 px copy for lists."""
+    os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
+    for recipe in SEED_RECIPES:
+        full = os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")
+        make_recipe_image(recipe, full)
+        thumb = Image.open(full)                                  # a 256 px copy for list rows
+        thumb.thumbnail((256, 256), Image.LANCZOS)
+        thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{recipe.uid}.jpg"), "JPEG", quality=85)
+        print("recipe image:", recipe.uid)
 
 
 def make_round_shape(out_path, size, radius, fill=(255, 255, 255), ring=None, ring_width=0):
@@ -409,6 +454,9 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather
         make_textures()
         sys.exit()
+    if sys.argv[1:] == ["recipes"]:               # "make_assets.py recipes" = only the recipe pictures
+        make_recipe_pictures()
+        sys.exit()
     if sys.argv[1:] == ["icons"]:                 # "make_assets.py icons" = only the small icons + app icon
         for name, char in ICONS.items():
             make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
@@ -417,13 +465,7 @@ if __name__ == "__main__":
     os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
     os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
-    for recipe in SEED_RECIPES:
-        full = os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")
-        make_recipe_image(recipe, full)
-        thumb = Image.open(full)                                  # a 256 px copy for list rows
-        thumb.thumbnail((256, 256), Image.LANCZOS)
-        thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{recipe.uid}.jpg"), "JPEG", quality=85)
-        print("recipe image:", recipe.uid)
+    make_recipe_pictures()
     for name, char in ICONS.items():
         make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
     make_container_icons()

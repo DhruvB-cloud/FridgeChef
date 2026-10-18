@@ -74,10 +74,12 @@ class BookCover(BoxLayout):
         self._spine.pos, self._spine.size = (x, y + dp(8)), (dp(16), h - dp(16))
 
     def open(self, on_done):
-        """Swing the cover open (it gets thinner and darker, as if turning away from you)."""
+        """Swing the cover open (it gets thinner and fades, as if turning away from you)."""
         self.fold, self.opacity = 1, 1
+        # It fades out completely (opacity 0): the window may keep showing the LAST frame of the
+        # animation for a while, and a cover squeezed to 1 pixel would stay visible as a thin line.
         anim = Animation(fold=0, duration=0.65, t="in_out_cubic") & \
-            Animation(opacity=0.4, duration=0.65, t="in_quad")
+            Animation(opacity=0, duration=0.65, t="in_quad")
         anim.bind(on_complete=lambda *_: on_done())
         anim.start(self)
 
