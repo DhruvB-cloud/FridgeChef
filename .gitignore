@@ -10,3 +10,8 @@ server/data/
 # ^ the server's database is re-created automatically on start
 *.log
 # ^ log files (e.g. the local server log)
+
+# Android Studio project settings (created when the folder is opened in Android Studio)
+.idea/
+# Word / Excel lock files while a document is open
+~$*
