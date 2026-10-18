@@ -2,19 +2,18 @@ r"""
 tools/make_assets.py
 --------------------
 WHY THIS FILE EXISTS:
-    "Each recipe should have an image by default." This DEVELOPER tool draws a soft, illustrated
-    picture for every built-in recipe (pastel background, a plate, the dish and a few ingredients)
-    plus the small icons used by the tab bar and the Profile tab.
-
-    It uses the colourful emoji font that ships with Windows 10/11 (Segoe UI Emoji), so run it on
-    Windows. The output PNG/JPG files are committed in the assets/ folder and bundled with the app,
-    so phones never need the font - this script is NOT part of the app itself.
+    This DEVELOPER tool makes the app's pictures: the fridge container pictures, the small icons
+    (tab bar, headers, Profile tab), the launcher icon, the wood / leather / background textures
+    and the rounded button shapes. Emoji pictures come from Google's Noto Emoji 2D set (downloaded),
+    with the Windows emoji font (Segoe UI Emoji) as a fallback - so run it on Windows. The output
+    files are committed in the assets/ folder and bundled with the app; this script is NOT part of
+    the app itself.
 
 RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
 ONLY THE FRIDGE CONTAINER PICTURES: .\.venv\Scripts\python tools\make_assets.py containers
 ONLY THE WOOD / LEATHER TEXTURES:  .\.venv\Scripts\python tools\make_assets.py textures
 ONLY THE SMALL ICONS + APP ICON:    .\.venv\Scripts\python tools\make_assets.py icons
-ONLY THE RECIPE PICTURES:           .\.venv\Scripts\python tools\make_assets.py recipes
+(The recipe PHOTOS come from Wikimedia Commons - see tools/fetch_recipe_photos.py.)
 """
 
 import os
@@ -25,43 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont   # noqa: E402
 
-from app.images import ICONS_DIR, RECIPE_IMAGES_DIR, gradient   # noqa: E402
-from app.seed_recipes import SEED_RECIPES                       # noqa: E402
+from app.images import ICONS_DIR, gradient                     # noqa: E402
 
 EMOJI_FONT = "seguiemj.ttf"          # Windows colour emoji font
-SIZE = 800                           # recipe pictures are 800 x 800 pixels
-
-# Main dish emoji + up to three garnish emojis for every built-in recipe (by uid).
-ART = {
-    "masala-omelette": ("\U0001F373", "\U0001F9C5\U0001F345\U0001F336"),
-    "vegetable-poha": ("\U0001F35A", "\U0001F95C\U0001F34B\U0001F954"),
-    "jeera-rice": ("\U0001F35A", "\U0001F9C8\U0001F33F"),
-    "dal-tadka": ("\U0001F372", "\U0001F9C4\U0001F345\U0001F33F"),
-    "cucumber-raita": ("\U0001F952", "\U0001F963\U0001F33F"),
-    "paneer-bhurji": ("\U0001F958", "\U0001F9C0\U0001FAD1\U0001F9C5"),
-    "chicken-curry": ("\U0001F35B", "\U0001F357\U0001F9C5\U0001F336"),
-    "aloo-tikki": ("\U0001F954", "\U0001F33F\U0001F336"),
-    "vegetable-pulao": ("\U0001F35A", "\U0001F955\U0001F9C5\U0001F33D"),
-    "hummus": ("\U0001F963", "\U0001F9C6\U0001F34B\U0001FAD2"),
-    "shakshuka": ("\U0001F958", "\U0001F373\U0001F345\U0001FAD1"),
-    "fattoush-salad": ("\U0001F957", "\U0001F952\U0001F345\U0001F34B"),
-    "chicken-shawarma-bowl": ("\U0001F32F", "\U0001F357\U0001F35A\U0001F952"),
-    "mujaddara": ("\U0001F372", "\U0001F9C5\U0001F35A"),
-    "scrambled-eggs-on-toast": ("\U0001F35E", "\U0001F373\U0001F9C8"),
-    "porridge-with-fruit": ("\U0001F963", "\U0001F34C\U0001F36F"),
-    "jacket-potato-with-beans": ("\U0001F954", "\U0001FAD8\U0001F9C0\U0001F9C8"),
-    "tomato-soup": ("\U0001F963", "\U0001F345\U0001F9C4\U0001F33F"),
-    "fruit-yogurt-bowl": ("\U0001F34E", "\U0001F34C\U0001F36F\U0001F95B"),
-    "cottage-pie": ("\U0001F967", "\U0001F954\U0001F955\U0001F969"),
-    "cheese-toastie": ("\U0001F96A", "\U0001F9C0\U0001F345"),
-}
-
-# Soft background colours per cuisine: (top, bottom).
-CUISINE_COLORS = {
-    "Indian": ((255, 236, 218), (252, 205, 170)),    # warm peach / saffron
-    "Arabic": ((246, 238, 220), (222, 214, 172)),    # sand / soft olive
-    "English": ((228, 236, 250), (205, 212, 240)),   # sky / lavender
-}
 
 # Small icons used by the UI: file name -> emoji.
 ICONS = {
@@ -69,7 +34,7 @@ ICONS = {
     "tab_recipes": "\U0001F372",     # pot of food
     "tab_cookbook": "\U0001F4D6",    # open book
     "tab_calendar": "\U0001F4C5",    # calendar
-    "tab_profile": "\U0001F9D1",     # person
+    "tab_profile": "\U0001F9D1\u200D\U0001F373",   # cook (person + frying pan = a chef)
     "fire": "\U0001F525",            # streak flame
     "trophy": "\U0001F3C6",          # longest streak
     "star": "⭐",                # favourite dish
@@ -84,52 +49,40 @@ ICONS = {
 }
 
 
-# Version 4.6: the small icons (tab bar, headers, Profile tab...) use Microsoft's Fluent Emoji 3D
-# pictures - the same glossy 3D style as the fridge containers. icon name -> Fluent emoji name.
-# (An icon missing here, or a failed download, falls back to the Windows emoji font above.)
-FLUENT_ICONS = {
-    "tab_fridge": "Broccoli", "tab_recipes": "Pot of food", "tab_cookbook": "Open book",
-    "tab_calendar": "Calendar", "tab_profile": "Cook",          # a chef, not just a person
-    "fire": "Fire", "trophy": "Trophy", "star": "Star", "plate": "Fork and knife with plate",
-    "muscle": "Flexed biceps", "grain": "Sheaf of rice", "bolt": "High voltage", "timer": "Stopwatch",
-    "heart": "Sparkling heart", "party": "Party popper", "camera": "Camera",
-}
+# Version 4.7: every emoji picture (fridge containers, tab bar, Profile icons, app icon) comes from
+# Google's free Noto Emoji set - clean 2D pictures (Apache licence, assets/icons/NOTO_LICENSE.txt).
+# A failed download falls back to the Windows colour emoji font.
+NOTO_URL = "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/png/512/emoji_u{0}.png"
+_NOTO_CACHE = {}                                         # emoji -> downloaded picture (each fetched once)
 
 
-# Version 4.6: every emoji the recipe pictures use, and its Fluent Emoji 3D name, so the recipe
-# pictures are drawn with the same glossy 3D food as the rest of the app.
-FLUENT_FOOD = {
-    "\U0001F373": "Cooking", "\U0001F9C5": "Onion", "\U0001F345": "Tomato", "\U0001F336": "Hot pepper",
-    "\U0001F35A": "Cooked rice", "\U0001F95C": "Peanuts", "\U0001F34B": "Lemon", "\U0001F954": "Potato",
-    "\U0001F9C8": "Butter", "\U0001F33F": "Herb", "\U0001F372": "Pot of food", "\U0001F9C4": "Garlic",
-    "\U0001F952": "Cucumber", "\U0001F963": "Bowl with spoon", "\U0001F958": "Shallow pan of food",
-    "\U0001F9C0": "Cheese wedge", "\U0001FAD1": "Bell pepper", "\U0001F35B": "Curry rice",
-    "\U0001F357": "Poultry leg", "\U0001F955": "Carrot", "\U0001F33D": "Ear of corn", "\U0001F9C6": "Falafel",
-    "\U0001FAD2": "Olive", "\U0001F957": "Green salad", "\U0001F32F": "Burrito", "\U0001F35E": "Bread",
-    "\U0001F34C": "Banana", "\U0001F36F": "Honey pot", "\U0001FAD8": "Beans", "\U0001F34E": "Red apple",
-    "\U0001F95B": "Glass of milk", "\U0001F967": "Pie", "\U0001F969": "Cut of meat", "\U0001F96A": "Sandwich",
-    "\U0001F37D": "Fork and knife with plate",
-}
-_FLUENT_CACHE = {}                                       # name -> downloaded picture (each fetched once)
+def noto_code(char):
+    """The file-name code of an emoji: '\U0001F9D1\u200D\U0001F373' (cook) -> '1f9d1_200d_1f373'.
+    (U+FE0F, the invisible 'show as emoji' mark, is not part of Noto's file names.)"""
+    return "_".join(f"{ord(c):x}" for c in char if ord(c) != 0xFE0F)
+
+
+def download_noto(char):
+    """Download the 512 x 512 Noto 2D picture of one emoji (or raise OSError)."""
+    import io, ssl, urllib.request
+    import certifi                                         # trusted certificates for HTTPS
+    if char not in _NOTO_CACHE:
+        context = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(NOTO_URL.format(noto_code(char)), context=context, timeout=30) as answer:
+            _NOTO_CACHE[char] = Image.open(io.BytesIO(answer.read())).convert("RGBA")
+    return _NOTO_CACHE[char].copy()
 
 
 def emoji_image(char, size):
-    """One emoji as a transparent RGBA image, cropped tightly and scaled to fit `size`.
-
-    Food emojis come from Fluent Emoji 3D (see FLUENT_FOOD); anything else - or a failed
-    download - is drawn with the Windows colour emoji font, as before."""
-    name = FLUENT_FOOD.get(char)
-    if name:
-        try:
-            if name not in _FLUENT_CACHE:
-                _FLUENT_CACHE[name] = _download_fluent(name)
-            glyph = _FLUENT_CACHE[name].copy()
-            glyph = glyph.crop(glyph.getchannel("A").getbbox())          # cut away the empty border
-            scale = size / max(glyph.size)                               # fit inside size x size
-            return glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))),
-                                Image.LANCZOS)
-        except OSError as error:
-            print(f"  (could not download {name}: {error} - using the emoji font)")
+    """One emoji as a transparent RGBA image, cropped tightly and scaled to fit `size` x `size`."""
+    try:
+        glyph = download_noto(char)
+        glyph = glyph.crop(glyph.getchannel("A").getbbox())              # cut away the empty border
+        scale = size / max(glyph.size)                                   # fit inside size x size
+        return glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))),
+                            Image.LANCZOS)
+    except OSError as error:
+        print(f"  (could not download Noto {noto_code(char)}: {error} - using the emoji font)")
     font = ImageFont.truetype(EMOJI_FONT, 256)
     canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
     ImageDraw.Draw(canvas).text((40, 40), char, font=font, embedded_color=True)
@@ -139,60 +92,6 @@ def emoji_image(char, size):
     glyph = canvas.crop(box)
     glyph.thumbnail((size, size), Image.LANCZOS)          # fit inside size x size
     return glyph
-
-
-def soft_shadow(size, box, blur, alpha):
-    """A blurred ellipse used as a soft drop shadow."""
-    mask = Image.new("L", size, 0)
-    ImageDraw.Draw(mask).ellipse(box, fill=alpha)
-    return mask.filter(ImageFilter.GaussianBlur(blur))
-
-
-def make_recipe_image(recipe, out_path):
-    rng = random.Random(recipe.uid)                       # same "random" layout every run
-    top, bottom = CUISINE_COLORS.get(recipe.cuisine, CUISINE_COLORS["English"])
-    img = gradient((SIZE, SIZE), top, bottom).convert("RGBA")
-
-    # Decorative soft bubbles in the background.
-    bubbles = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bubbles)
-    for _ in range(7):
-        r = rng.randint(40, 130)
-        x, y = rng.randint(0, SIZE), rng.randint(0, SIZE)
-        bd.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, 55))
-    img = Image.alpha_composite(img, bubbles.filter(ImageFilter.GaussianBlur(6)))
-
-    # Plate: shadow, white disc, faint inner rim.
-    shadow = soft_shadow((SIZE, SIZE), [150, 190, 650, 690], 28, 90)
-    img.paste((90, 70, 50, 255), (0, 0), shadow)
-    d = ImageDraw.Draw(img)
-    d.ellipse([140, 140, 660, 660], fill=(255, 255, 255, 255))
-    d.ellipse([185, 185, 615, 615], outline=(240, 236, 230, 255), width=6)
-
-    main, garnish = ART.get(recipe.uid, ("\U0001F37D", ""))
-    hero = emoji_image(main, 340)
-    img.alpha_composite(hero, ((SIZE - hero.width) // 2, (SIZE - hero.height) // 2))
-
-    # Garnishes around the plate, slightly rotated for a hand-placed look.
-    spots = [(70, 70), (590, 90), (600, 590), (80, 600)]
-    rng.shuffle(spots)
-    for char, (x, y) in zip(garnish, spots):
-        g = emoji_image(char, 130).rotate(rng.randint(-25, 25), expand=True, resample=Image.BICUBIC)
-        img.alpha_composite(g, (x, y))
-
-    img.convert("RGB").save(out_path, "JPEG", quality=88)
-
-
-def make_recipe_pictures():
-    """The picture of every built-in recipe (800 px) plus a 256 px copy for lists."""
-    os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
-    for recipe in SEED_RECIPES:
-        full = os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")
-        make_recipe_image(recipe, full)
-        thumb = Image.open(full)                                  # a 256 px copy for list rows
-        thumb.thumbnail((256, 256), Image.LANCZOS)
-        thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{recipe.uid}.jpg"), "JPEG", quality=85)
-        print("recipe image:", recipe.uid)
 
 
 def make_round_shape(out_path, size, radius, fill=(255, 255, 255), ring=None, ring_width=0):
@@ -223,7 +122,7 @@ def make_ui_shapes():
 
 def make_app_icon(out_path, size=512):
     """The launcher icon on the phone's home screen: an emerald rounded square, a white plate and
-    the 3D pot of food (version 4.6; the emoji font is used if the download fails)."""
+    the 2D pot of food (version 4.7)."""
     s = 4                                                   # draw 4x bigger, then shrink = smooth edges
     big = Image.new("RGBA", (size * s, size * s), (0, 0, 0, 0))
     bg = gradient((size * s, size * s), (84, 199, 133), (26, 140, 107)).convert("RGBA")   # light -> deep emerald
@@ -234,95 +133,69 @@ def make_app_icon(out_path, size=512):
     off = (size * s - plate) // 2
     ImageDraw.Draw(big).ellipse([off, off, off + plate, off + plate], fill=(255, 255, 255, 255))
     icon = big.resize((size, size), Image.LANCZOS)
-    try:
-        pot = _download_fluent("Pot of food")              # the 3D pot of food on the plate
-        pot = pot.crop(pot.getchannel("A").getbbox())
-        pot.thumbnail((int(size * 0.5), int(size * 0.5)), Image.LANCZOS)
-    except OSError:
-        pot = emoji_image("\U0001F372", int(size * 0.46))   # fallback: the emoji font
+    pot = emoji_image("\U0001F372", int(size * 0.5))         # the pot of food on the plate
     icon.alpha_composite(pot, ((size - pot.width) // 2, (size - pot.height) // 2))
     icon.save(out_path, "PNG")
 
 
 def make_icon(name, char, out_path, size=128):
-    """One small square icon: the Fluent 3D picture if there is one, else the emoji `char`."""
+    """One small square icon: the emoji `char`, centred (Noto 2D, see emoji_image)."""
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    glyph, source = None, "emoji font"
-    if name in FLUENT_ICONS:
-        try:
-            glyph = _download_fluent(FLUENT_ICONS[name])
-            glyph = glyph.crop(glyph.getchannel("A").getbbox())     # cut away the empty border
-            glyph.thumbnail((int(size * 0.92), int(size * 0.92)), Image.LANCZOS)   # fit, keep the shape
-            source = "Fluent 3D"
-        except OSError as error:                                   # no internet: use the emoji font
-            print(f"  (could not download {FLUENT_ICONS[name]}: {error})")
-    if glyph is None:
-        glyph = emoji_image(char, int(size * 0.86))
+    glyph = emoji_image(char, int(size * 0.9))
     icon.alpha_composite(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2))   # centred
     icon.save(out_path, "PNG")
-    print(f"icon: {name:13} ({source})")
+    print("icon:", name)
 
 
 # ----------------------------------------------------------------------------------------------
-# FRIDGE CONTAINER PICTURES (version 4.5)
+# FRIDGE CONTAINER PICTURES (version 4.7: 2D)
 # ----------------------------------------------------------------------------------------------
-# Each container (jar, bottle, ...) is a 3D picture. It comes from, in this order:
+# Each container (jar, bottle, ...) is a picture. It comes from, in this order:
 #   1. YOUR OWN picture, if you put one in  assets/icons/custom/<kind>.png  (e.g. custom/jar.png)
-#   2. otherwise Microsoft's free "Fluent Emoji 3D" set (MIT licence, see assets/icons/FLUENT_LICENSE.txt)
+#   2. otherwise Google's free Noto Emoji 2D set (Apache licence, see assets/icons/NOTO_LICENSE.txt)
 # The tool trims the empty space around the picture, saves it as assets/icons/container_<kind>.png,
 # makes the mouldy "expired" version, and writes assets/icons/containers.json - the picture sizes
 # and where the app puts the cream name sticker. The app reads that file, so new pictures just work.
-FLUENT_URL = "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/{0}/3D/{1}_3d.png"
 CUSTOM_DIR = os.path.join(ICONS_DIR, "custom")           # drop your own <kind>.png files here
 
-# kind -> (Fluent emoji name, where the name sticker goes as fractions of the picture:
+# kind -> (emoji, where the name sticker goes as fractions of the picture:
 #          centre x, centre y (from the top), width, height)
 CONTAINER_SOURCES = {
-    "jar": ("Jar", (0.50, 0.55, 0.74, 0.27)),
-    "bottle": ("Sake", (0.50, 0.66, 0.80, 0.24)),            # only the bottle - the cup is cut away
-    "dish": ("Curry rice", (0.50, 0.78, 0.62, 0.27)),
-    "carton": ("Beverage box", (0.47, 0.64, 0.74, 0.24)),
-    "can": ("Canned food", (0.50, 0.52, 0.78, 0.27)),
-    "tub": ("Bowl with spoon", (0.50, 0.74, 0.64, 0.27)),
-    "box": ("Bento box", (0.50, 0.76, 0.60, 0.27)),
-    "basket": ("Basket", (0.50, 0.76, 0.60, 0.25)),
-    "pot": ("Pot of food", (0.50, 0.78, 0.54, 0.24)),
-    "glass": ("Glass of milk", (0.50, 0.60, 0.68, 0.22)),
-    "greens": ("Leafy green", (0.50, 0.62, 0.66, 0.24)),
-    "takeout": ("Takeout box", (0.50, 0.70, 0.60, 0.24)),
+    "jar": ("\U0001FAD9", (0.50, 0.58, 0.80, 0.26)),
+    "bottle": ("\U0001F376", (0.50, 0.68, 0.84, 0.24)),       # only the bottle - the cup is cut away
+    "dish": ("\U0001F35B", (0.50, 0.74, 0.62, 0.26)),
+    "carton": ("\U0001F9C3", (0.50, 0.66, 0.72, 0.22)),
+    "can": ("\U0001F96B", (0.50, 0.58, 0.80, 0.26)),
+    "tub": ("\U0001F963", (0.50, 0.70, 0.62, 0.26)),
+    "box": ("\U0001F371", (0.50, 0.62, 0.62, 0.26)),
+    "basket": ("\U0001F9FA", (0.50, 0.70, 0.60, 0.25)),
+    "pot": ("\U0001F372", (0.50, 0.74, 0.54, 0.24)),
+    "glass": ("\U0001F95B", (0.50, 0.62, 0.66, 0.22)),
+    "greens": ("\U0001F96C", (0.50, 0.62, 0.64, 0.22)),
+    "takeout": ("\U0001F961", (0.50, 0.70, 0.60, 0.22)),
 }
 
 
-def _download_fluent(name):
-    """Download one Fluent Emoji 3D picture (256 x 256 PNG) and return it as an image."""
-    import io, ssl, urllib.parse, urllib.request
-    import certifi                                         # trusted certificates for HTTPS
-    folder, file = urllib.parse.quote(name), name.lower().replace(" ", "_")
-    context = ssl.create_default_context(cafile=certifi.where())
-    urls = [FLUENT_URL.format(folder, file),                                    # most pictures
-            FLUENT_URL.replace("/3D/", "/Default/3D/").format(folder, file).replace("_3d.png", "_3d_default.png")]
-    for url in urls:                                       # people / hands: the "Default" skin-tone folder
-        try:
-            with urllib.request.urlopen(url, context=context, timeout=30) as answer:
-                return Image.open(io.BytesIO(answer.read())).convert("RGBA")
-        except urllib.error.HTTPError:                     # 404 = not in this folder: try the next one
-            continue
-    raise OSError(f"no Fluent 3D picture called {name!r}")
-
-
 def _only_the_bottle(img):
-    """The Fluent 'sake' picture is a bottle WITH a small cup in front of it. Keep only the bottle:
-    cut off the left part, and repaint the corner the cup hid with the bottle's own left-side shade."""
-    img = img.crop((108, 0, img.width, img.height))        # the bottle starts at x = 108
-    px, centre = img.load(), 67                            # the bottle's middle (measured)
-    alpha = img.getchannel("A")
-    bottom = max(y for y in range(img.height) if alpha.getpixel((centre, y)) > 128)
-    for y in range(150, img.height):                       # the cup covered the rows from y = 150 down
+    """The 'sake' picture is a bottle WITH a small cup in front of it, on the left. Keep only the
+    bottle (it is symmetric, so its right half tells us its shape):
+      1. the bottle's middle = the middle of its neck (the top quarter shows only the neck),
+      2. its left edge = the right edge mirrored around that middle,
+      3. the cup's top = the highest point left of the bottle,
+      4. below that, repaint the left half: the bottle's own colour from just above the cup,
+         with the outline of the mirrored right half."""
+    img = img.crop(img.getchannel("A").getbbox())
+    alpha, w, h = img.getchannel("A"), img.width, img.height
+    neck = [x for x in range(w) if any(alpha.getpixel((x, y)) > 128 for y in range(0, h // 4, 4))]
+    centre = (min(neck) + max(neck)) // 2                  # 1. the middle of the neck
+    left = max(0, 2 * centre - (w - 1))                    # 2. mirror of the right edge
+    cup_top = min(y for y in range(h) for x in range(0, left, 3) if alpha.getpixel((x, y)) > 128)   # 3.
+    img = img.crop((left, 0, w, h))                        # drop everything left of the bottle
+    px, centre = img.load(), centre - left
+    for y in range(cup_top - 2, img.height):               # 4. repaint where the cup was
         for x in range(centre):
-            mirror = px[2 * centre - x, y]                 # the bottle is symmetric: its outline...
-            r, g, b, _ = px[x, 149]                        # ...and the colour just above the cup
-            shade = 0.96 if y >= bottom - 10 else 1        # slightly darker at the very bottom
-            px[x, y] = (int(r * shade), int(g * shade), int(b * shade), mirror[3])
+            r, g, b, _ = px[x, cup_top - 4]                # colour just above the cup...
+            px[x, y] = (r, g, b, px[2 * centre - x, y][3])  # ...with the mirrored outline
     return img
 
 
@@ -361,12 +234,12 @@ def make_container_icons():
     """Make every container picture (+ expired version) and assets/icons/containers.json."""
     import json
     art = {}
-    for kind, (fluent_name, (cx, cy, fw, fh)) in CONTAINER_SOURCES.items():
+    for kind, (char, (cx, cy, fw, fh)) in CONTAINER_SOURCES.items():
         custom = os.path.join(CUSTOM_DIR, f"{kind}.png")
         if os.path.exists(custom):                         # 1. your own picture wins
             img, source = Image.open(custom).convert("RGBA"), "custom"
-        else:                                              # 2. the Fluent 3D picture
-            img, source = _download_fluent(fluent_name), "Fluent 3D"
+        else:                                              # 2. the Noto 2D picture
+            img, source = download_noto(char), "Noto 2D"
             if kind == "bottle":
                 img = _only_the_bottle(img)
         img = _trim(img)
@@ -454,18 +327,12 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather
         make_textures()
         sys.exit()
-    if sys.argv[1:] == ["recipes"]:               # "make_assets.py recipes" = only the recipe pictures
-        make_recipe_pictures()
-        sys.exit()
     if sys.argv[1:] == ["icons"]:                 # "make_assets.py icons" = only the small icons + app icon
         for name, char in ICONS.items():
             make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
         make_app_icon(os.path.join(os.path.dirname(ICONS_DIR), "app_icon.png"))
         sys.exit()
-    os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
-    os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
-    make_recipe_pictures()
     for name, char in ICONS.items():
         make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
     make_container_icons()

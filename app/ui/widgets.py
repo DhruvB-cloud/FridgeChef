@@ -716,7 +716,7 @@ class RecipeTile(TapCard):
     def __init__(self, match, on_open, **kwargs):
         super().__init__(orientation="horizontal", spacing=dp(12), padding=dp(10), **kwargs)
         recipe = match.recipe
-        picture = RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(16),
+        picture = RoundImage(resolve_image(recipe.picture, small=True), radius=dp(16),
                              size_hint=(None, None), size=(dp(88), dp(88)))
         holder = BoxLayout(size_hint=(None, None), size=(dp(88), dp(88)),
                            pos_hint={"center_y": 0.5})               # vertically centred in the row
@@ -745,7 +745,7 @@ class RecipeCard(TapCard):
             self.size_hint_x = None
             self.width = width
         recipe = match.recipe
-        self.add_widget(RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(14),
+        self.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(14),
                                    size_hint_y=None, height=dp(112)))
         self.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(14),
                                   max_lines=2, shorten=True, shorten_from="right"))
@@ -889,7 +889,7 @@ class RecipeThumb(ButtonBehavior, FloatLayout):
         self.bind(width=lambda *_: setattr(self, "height", self.width * THUMB_RATIO))
         bg_rect(self, (0, 0, 0, 0), radius=dp(20), shadow=True)   # only the soft shadow
         recipe = match.recipe
-        self.add_widget(RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(20),
+        self.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(20),
                                    pos_hint={"x": 0, "y": 0}))
         shade = Widget(size_hint=(1, 0.55), pos_hint={"x": 0, "y": 0})   # dark fade behind the name
         with shade.canvas:

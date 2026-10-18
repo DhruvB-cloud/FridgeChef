@@ -18,6 +18,6 @@ Then run (from the FridgeChef folder):
     .\.venv\Scripts\python tools\make_assets.py containers
 
 That trims your picture, makes its mouldy "expired" version and updates containers.json.
-Pictures without a custom file keep using Microsoft's free Fluent Emoji 3D set.
+Pictures without a custom file keep using Google's free Noto Emoji 2D set.
 To move the name sticker, change that container's numbers in CONTAINER_SOURCES in
 tools/make_assets.py (centre x, centre y, width, height - as fractions of the picture) and run it again.

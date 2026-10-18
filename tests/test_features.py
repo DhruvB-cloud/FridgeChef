@@ -240,6 +240,42 @@ class Version41Test(unittest.TestCase):
             db.close()
 
 
+class Version47Test(unittest.TestCase):
+    """Version 4.7: real food photos (with credits) and the user's own photo for any recipe."""
+
+    def test_every_builtin_recipe_has_a_free_photo_with_credit(self):
+        from app.images import RECIPE_IMAGES_DIR, photo_credit
+        from app.seed_recipes import SEED_RECIPES
+        for recipe in SEED_RECIPES:
+            self.assertTrue(os.path.exists(os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")), recipe.uid)
+            credit = photo_credit(recipe.image_path)
+            self.assertIsNotNone(credit, recipe.uid)                     # who took it...
+            self.assertTrue(credit["author"] and len(credit["author"].splitlines()) == 1, recipe.uid)
+            self.assertTrue(credit["licence"].lower().startswith(("cc0", "cc by", "public domain")),
+                            (recipe.uid, credit["licence"]))             # ...and a free licence
+
+    def test_own_photo_replaces_and_restores_the_picture(self):
+        from app.database import Database
+        with tempfile.TemporaryDirectory() as folder:
+            db = Database(os.path.join(folder, "x.db"))
+            recipe = db.list_recipes()[0]
+            original = recipe.image_path
+            photo = os.path.join(folder, "mine.jpg")
+            open(photo, "wb").close()                                    # a (fake) photo file
+            db.set_custom_image(recipe.id, photo)
+            again = db.get_recipe(recipe.id)
+            self.assertEqual(again.picture, photo)                       # the user's photo is shown...
+            self.assertEqual(again.image_path, original)                 # ...the original is kept
+            self.assertEqual(db.custom_images(), {recipe.uid: photo})
+            db.log_cooked(recipe.id, 1)                                  # the Calendar shows it too
+            self.assertEqual(db.cook_log()[0]["image_path"], photo)
+            os.remove(photo)                                             # photo deleted from the phone:
+            self.assertEqual(db.get_recipe(recipe.id).picture, original)  # fall back to the original
+            db.set_custom_image(recipe.id, None)                         # "Use original"
+            self.assertIsNone(db.get_recipe(recipe.id).custom_image)
+            db.close()
+
+
 class SchemaTest(unittest.TestCase):
     def test_recipe_round_trip(self):
         original = SEED_RECIPES[0]

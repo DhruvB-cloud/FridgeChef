@@ -89,6 +89,27 @@ def resolve_image(image_path, small=False):
     return image_path if os.path.exists(image_path) else None   # user photo on this device
 
 
+_CREDITS = None                                                # loaded on first use
+
+
+def photo_credit(image_path):
+    """Who took a built-in recipe photo, e.g. {"author": "Jane", "licence": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/...", ...} - or None (own photos, drawings).
+
+    The photos come from Wikimedia Commons; their free licences ask us to credit the photographer.
+    tools/fetch_recipe_photos.py writes the credits into assets/recipe_images/credits.json."""
+    global _CREDITS
+    if _CREDITS is None:
+        import json                                            # local import: only needed here
+        try:
+            with open(os.path.join(RECIPE_IMAGES_DIR, "credits.json"), encoding="utf-8") as f:
+                _CREDITS = json.load(f)
+        except (OSError, ValueError):                          # missing / broken file: no credits
+            _CREDITS = {}
+    name = asset_name(image_path)
+    return _CREDITS.get(name[:-4]) if name and name.endswith(".jpg") else None
+
+
 def asset_name(image_path):
     """'asset:dal-tadka.jpg' -> 'dal-tadka.jpg' (None for user photos)."""
     if image_path and image_path.startswith("asset:"):

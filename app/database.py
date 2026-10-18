@@ -93,7 +93,8 @@ CREATE TABLE IF NOT EXISTS settings (
 # Columns added after version 1: table -> [(column, SQL type + default)].
 MIGRATIONS = {
     "recipes": [("uid", "TEXT"), ("protein_g", "REAL NOT NULL DEFAULT 0"),
-                ("carbs_g", "REAL NOT NULL DEFAULT 0"), ("calories", "REAL NOT NULL DEFAULT 0")],
+                ("carbs_g", "REAL NOT NULL DEFAULT 0"), ("calories", "REAL NOT NULL DEFAULT 0"),
+                ("custom_image", "TEXT")],                           # the user's own photo: version 4.7
     "cook_log": [("recipe_name", "TEXT"), ("photo_path", "TEXT")],   # photo_path: version 4
     "pantry_items": [("container", "TEXT")],                         # bottle / jar / dish: version 4.1
 }
@@ -286,6 +287,7 @@ class Database:
             nutrition_tags=json.loads(row["nutrition_tags"]),
             appliances=json.loads(row["appliances"]),
             image_path=row["image_path"],
+            custom_image=row["custom_image"],              # the user's own photo (version 4.7) or None
             is_user=bool(row["is_user"]),
             is_saved=bool(row["is_saved"]),
             ingredients=[Ingredient(name=r["name"], quantity=r["quantity"], unit=r["unit"],
@@ -382,6 +384,17 @@ class Database:
         """Save pending changes (used after many upserts with commit=False)."""
         self.conn.commit()
 
+    def set_custom_image(self, recipe_id, path):
+        """Use the user's own photo for a recipe (path), or the original picture again (None)."""
+        self.conn.execute("UPDATE recipes SET custom_image=? WHERE id=?", (path, recipe_id))
+        self.conn.commit()
+
+    def custom_images(self):
+        """uid -> the user's own photo, for every recipe that has one (the Recipes tab uses this for
+        recipes that came from the server, which know nothing about photos on this phone)."""
+        rows = self.conn.execute("SELECT uid, custom_image FROM recipes WHERE custom_image IS NOT NULL")
+        return {r["uid"]: r["custom_image"] for r in rows}
+
     def saved_flags(self):
         """{uid: is_saved} for every recipe - lets server results show the local Saved state."""
         return {r["uid"]: bool(r["is_saved"]) for r in self.conn.execute("SELECT uid, is_saved FROM recipes")}
@@ -421,7 +434,8 @@ class Database:
         own photo or None), image_path (the recipe's picture) and recipe_exists (0 if the recipe
         was deleted since - then image_path is None too).
         """
-        sql = ("SELECT c.id, c.recipe_id, c.recipe_name, c.servings, c.cooked_on, c.photo_path, r.image_path, "
+        sql = ("SELECT c.id, c.recipe_id, c.recipe_name, c.servings, c.cooked_on, c.photo_path, "
+               "COALESCE(r.custom_image, r.image_path) AS image_path, "   # the user's photo wins
                "r.id IS NOT NULL AS recipe_exists "
                "FROM cook_log c LEFT JOIN recipes r ON r.id = c.recipe_id WHERE 1=1")
         params = []

@@ -8,6 +8,7 @@ WHY THIS FILE EXISTS:
     That separation means you could swap SQLite for something else without touching the UI.
 """
 
+import os                                   # check that the user's own photo still exists
 import re                                   # regular expressions, used by slugify()
 from dataclasses import dataclass, field   # dataclass auto-writes __init__, __repr__ etc. for us
 from datetime import date                   # used to compare expiry dates with "today"
@@ -137,6 +138,9 @@ class Recipe:
     nutrition_tags: List[str] = field(default_factory=list)        # e.g. ["High Protein"]
     appliances: List[str] = field(default_factory=list)            # ANY one of these is enough
     image_path: Optional[str] = None       # "asset:<file>" for built-in images, else a full file path
+    # Version 4.7: a photo the user chose for this recipe ("Change photo"). It REPLACES the picture
+    # on screen but image_path stays untouched, so "Use original photo" can bring it back.
+    custom_image: Optional[str] = None
     is_user: bool = False                                          # True = created by the user
     is_saved: bool = False                                         # True = in "Saved dishes"
     id: Optional[int] = None               # LOCAL database primary key (differs per device)
@@ -148,3 +152,11 @@ class Recipe:
     # A stable text id that is the same on every device and on the server (e.g. "dal-tadka").
     # The numeric `id` above can differ between the phone and the server; `uid` never does.
     uid: Optional[str] = None
+
+    @property
+    def picture(self):
+        """The picture to show: the user's own photo if they set one (and it still exists),
+        otherwise the recipe's original picture."""
+        if self.custom_image and os.path.exists(self.custom_image):
+            return self.custom_image
+        return self.image_path

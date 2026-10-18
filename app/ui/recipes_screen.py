@@ -170,10 +170,12 @@ class RecipesScreen(Screen):
         meal, recommended, results = result
         db = self.app.db
         saved = db.saved_flags()
+        own_photos = db.custom_images()                  # photos the user chose on this phone
         # Save every server recipe locally (keeps the offline copy fresh) and use the LOCAL id.
         for match in {id(m): m for m in recommended + results}.values():   # each object once
             match.recipe.id = db.upsert_catalog_recipe(match.recipe, commit=False)
             match.recipe.is_saved = saved.get(match.recipe.uid, False)
+            match.recipe.custom_image = own_photos.get(match.recipe.uid)
         db.commit()
         # The user's own recipes only exist on the phone: match them here and merge them in.
         mine = match_all(db.list_user_recipes(), snapshot["pantry"], snapshot["appliances"],
@@ -226,7 +228,7 @@ class RecipesScreen(Screen):
     @staticmethod
     def _fingerprint(matches):
         """A short summary of a result list: changes only when something VISIBLE changes."""
-        return tuple((m.recipe.uid, m.recipe.image_path, m.appliance_ok,
+        return tuple((m.recipe.uid, m.recipe.picture, m.appliance_ok,
                       tuple(i.name for i in m.missing), tuple(m.uses_expiring_today),
                       tuple(m.uses_expiring_soon)) for m in matches)
 

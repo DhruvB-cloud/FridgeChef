@@ -23,7 +23,8 @@ from kivy.uix.image import Image                    # shows the finished recipe 
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
-from app.images import resolve_image
+from app.images import photo_credit, resolve_image
+from app.ui.image_picker import import_image, pick_image   # "Change photo"
 from app.recipe_card import create_recipe_card
 from app.recipe_engine import build_pantry_index, match_recipe, plan_deduction
 from app.share import share_image
@@ -116,8 +117,9 @@ class RecipeDetailScreen(Screen):
         c.clear_widgets()
 
         # --- photo (every recipe has one: bundled, downloaded, own photo or generated)
-        c.add_widget(RoundImage(resolve_image(recipe.image_path), radius=dp(26),
+        c.add_widget(RoundImage(resolve_image(recipe.picture), radius=dp(26),
                                 size_hint_y=None, height=dp(210)))
+        c.add_widget(self._photo_row(recipe))            # credit + "Change photo" (version 4.7)
 
         # --- chips
         chips = [diet_chip(recipe.is_veg), Chip(recipe.cuisine, BLUE_SOFT, BLUE),
@@ -246,7 +248,7 @@ class RecipeDetailScreen(Screen):
         path = os.path.join(self.app.cards_dir, f"recipe_card_{self.recipe.id}_{stamp}.png")
         remove_old_cards(self.app.cards_dir)                # tidy up earlier cards (skips open ones)
         try:
-            create_recipe_card(self.recipe, path, image_file=resolve_image(self.recipe.image_path))
+            create_recipe_card(self.recipe, path, image_file=resolve_image(self.recipe.picture))
         except Exception as error:
             show_message("Could not create card", escape(str(error)))
             return
@@ -310,14 +312,68 @@ class RecipeDetailScreen(Screen):
         confirm("Update fridge?", f"These amounts will be removed:\n\n{summary}", _apply,
                 yes_text="Update fridge", height=dp(420))
 
+    # ------------------------------------------------------------------ photo (version 4.7)
+    def _photo_row(self, recipe):
+        """Under the photo: who took it (built-in photos) and the 'Change photo' buttons."""
+        row = BoxLayout(size_hint_y=None, height=dp(36), spacing=dp(8))
+        credit = photo_credit(recipe.image_path)
+        if recipe.custom_image and recipe.picture == recipe.custom_image:
+            text = "[i]Your photo[/i]"
+        elif credit:                                       # free photos: credit the photographer
+            text = f"Photo: {escape(credit['author'])} • {escape(credit['licence'])}"
+        else:
+            text = ""
+        label = Label(text=text, markup=True, color=MUTED, font_size=sp(11.5), halign="left",
+                      valign="middle", shorten=True)
+        label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align
+        if credit and not recipe.custom_image:             # tap the credit for the full details
+            label.bind(on_touch_down=lambda l, t: self._show_credit(credit) if l.collide_point(*t.pos) else None)
+        row.add_widget(label)
+        if recipe.custom_image:                            # undo: back to the original picture
+            row.add_widget(SoftButton("Use original", size_hint=(None, None), size=(dp(104), dp(34)),
+                                      bg=NEUTRAL, fg=INK, font_size=sp(12.5),
+                                      on_release=lambda *_: self._set_photo(None)))
+        row.add_widget(SoftButton("Change photo", size_hint=(None, None), size=(dp(112), dp(34)),
+                                  bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(12.5),
+                                  on_release=lambda *_: pick_image(self._photo_picked)))
+        return row
+
+    @staticmethod
+    def _show_credit(credit):
+        show_message("Photo credit",
+                     f"[b]{escape(credit['author'])}[/b]\n"
+                     f"Licence: {escape(credit['licence'])}\n{escape(credit.get('licence_url', ''))}\n\n"
+                     f"From Wikimedia Commons (cropped to a square):\n{escape(credit['source'])}",
+                     height=dp(340))
+
+    def _photo_picked(self, path):
+        """The user chose a photo: copy a resized version into the app folder and use it."""
+        try:
+            new_path = import_image(path, self.app.images_dir)
+        except Exception as error:                         # not an image, or unreadable
+            show_message("Photo problem", f"Could not use this file:\n{escape(error)}")
+            return
+        self._set_photo(new_path)
+
+    def _set_photo(self, new_path):
+        """Save the user's photo for this recipe (None = back to the original) and redraw."""
+        old = self.recipe.custom_image
+        self.app.db.set_custom_image(self.recipe.id, new_path)
+        if old and old != new_path and os.path.exists(old):
+            try:
+                os.remove(old)                             # the replaced photo is not needed any more
+            except OSError:
+                pass
+        self.refresh()
+
     def _delete(self):
         def _do():
-            path = self.recipe.image_path
-            if path and not path.startswith("asset:") and os.path.exists(path):
-                try:
-                    os.remove(path)                        # free the space used by the photo
-                except OSError:
-                    pass
+            for path in (self.recipe.image_path, self.recipe.custom_image):
+                if path and not path.startswith("asset:") and os.path.exists(path):
+                    try:
+                        os.remove(path)                    # free the space used by the photo
+                    except OSError:
+                        pass
             self.app.db.delete_recipe(self.recipe.id)
             self.app.go_back()
         confirm("Delete recipe", f"Delete '{escape(self.recipe.name)}' permanently?", _do,

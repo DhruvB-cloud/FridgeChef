@@ -91,7 +91,7 @@ class IndexLine(ButtonBehavior, BoxLayout):
         super().__init__(size_hint_y=None, height=dp(66), spacing=dp(12), padding=(0, dp(7)), **kwargs)
         recipe = match.recipe
         holder = BoxLayout(size_hint=(None, None), size=(dp(52), dp(52)), pos_hint={"center_y": 0.5})
-        holder.add_widget(RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(26)))   # round
+        holder.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(26)))   # round
         self.add_widget(holder)
         texts = BoxLayout(orientation="vertical")
         name = Label(text=f"[b]{escape(recipe.name)}[/b]", markup=True, color=INK_BROWN, font_size=sp(15),
