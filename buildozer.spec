@@ -14,7 +14,7 @@ package.name = fridgechef
 package.domain = org.fridgechef
 # Where the source code is (this folder) and which file types to include in the APK.
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,json
+source.include_exts = py,png,jpg,jpeg,ttf,json,txt
 # Folders that must NOT be packed into the APK: tests, the desktop virtual environment, the web
 # server (it runs on a computer, not the phone) and the developer asset tools.
 # The assets/ folder (recipe pictures, icons, rounded UI shapes) IS included.
