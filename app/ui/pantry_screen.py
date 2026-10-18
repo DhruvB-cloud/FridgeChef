@@ -68,16 +68,28 @@ FOOD_STYLES = {
 # The fridge's colours are the "fridge" scene in widgets.SCENES (shared look of all tabs).
 SHELF = (1, 1, 1, 0.95)                           # white glass shelves and the door rail
 
-MAX_ART_WIDTH = {"jar": dp(104), "dish": dp(104), "bottle": dp(84), "carton": dp(80), "can": dp(84),
-                 "tub": dp(104), "box": dp(108), "basket": dp(108)}   # pictures never get bigger than this
+# How tall each picture is drawn (the width follows from its shape). Drinks are a bit taller.
+ART_HEIGHT = {"bottle": dp(104), "carton": dp(100), "glass": dp(96)}
+DEFAULT_ART_HEIGHT = dp(88)
+STICKER = (1, 0.98, 0.93, 0.96)                   # the cream name sticker on each container
 SHELF_BASE = dp(12)                               # items stand this high above the bottom of a shelf row
 EMPTY_SHELF_HEIGHT = dp(30)                       # an empty shelf is just a low gap with a line
 
 
-def art_height(kind, width=None):
-    """Height of a container picture drawn `width` wide (default: its biggest size)."""
+def art_height(kind):
+    """The (biggest) height a container picture is drawn at."""
+    return ART_HEIGHT.get(kind, DEFAULT_ART_HEIGHT)
+
+
+def art_size(kind, max_width):
+    """(width, height) of a container picture: its normal height, made smaller only if it would be
+    wider than `max_width`. The picture's shape is always kept."""
     w, h = CONTAINER_ART[kind]["size"]
-    return (width or MAX_ART_WIDTH[kind]) * h / w   # keep the picture's shape
+    height = art_height(kind)
+    width = height * w / h                          # same shape as the picture file
+    if width > max_width:                           # too wide for its place on the shelf:
+        width, height = max_width, max_width * h / w   # shrink both sides equally
+    return width, height
 
 
 def _text_size(text, font_size, wrap_width=None):
@@ -126,11 +138,13 @@ class ContainerArt(FloatLayout):
                                 max_lines=3,
                                 size_hint=((right - left) / w, (bottom - top) / h),
                                 pos_hint={"x": left / w, "y": (h - bottom) / h})
+        bg_rect(self.name_label, STICKER, radius=dp(7))   # the 3D pictures have no label: add a sticker
         self.name_label.bind(size=self._fit_name)
         self.add_widget(self.name_label)
 
-    def set_width(self, width):
-        self.size = (width, art_height(self.kind, width))
+    def fit(self, max_width):
+        """Take the biggest size that fits `max_width` (see art_size)."""
+        self.size = art_size(self.kind, max_width)
 
     def _fit_name(self, label, size):
         """The label changed size: wrap the name inside it with the biggest font that fits."""
@@ -163,7 +177,7 @@ class ItemTile(ButtonBehavior, Widget):
 
     def _place(self, *_):
         """Stand the picture on the bottom of the tile, centred, as wide as fits."""
-        self.art.set_width(min(self.width, MAX_ART_WIDTH[self.art.kind]))
+        self.art.fit(self.width)
         self.art.pos = (self.center_x - self.art.width / 2, self.y)
         self._move.y = self.lift
         self._scale.x = self._scale.y = self.shrink
@@ -239,8 +253,8 @@ class DoorRack(BoxLayout):
                 gleam = Line(width=dp(1))                 # a small reflection
                 self._bins.append((panel, rim, gleam))
         self.bind(pos=self._draw, size=self._draw)
-        for row in rows:                                 # rows are placed AFTER the rack moves, so
-            row.bind(pos=self._draw)                     # redraw the bins when they move too
+        for row in rows:                                 # rows are placed and sized AFTER the rack, so
+            row.bind(pos=self._draw, size=self._draw)    # redraw the bins when they move or resize too
 
     def _draw(self, *_):
         for (panel, rim, gleam), row in zip(self._bins, self._rows):
@@ -452,7 +466,7 @@ class ContainerButton(ButtonBehavior, BoxLayout):
             Color(*MUTED)
             self._arrow = Triangle()
         self.bind(pos=self._draw_arrow, size=self._draw_arrow)
-        self.dropdown = SoftDropDown(auto_width=False, width=dp(300))
+        self.dropdown = SoftDropDown(auto_width=False, width=dp(300), max_height=dp(380))
         self.dropdown.container.cols = 2                  # 8 choices: two columns of four
         self.options = {}
         for kind in CONTAINERS:

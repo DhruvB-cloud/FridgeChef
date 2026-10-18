@@ -48,21 +48,18 @@ def cache_dir():
     return _cache_dir
 
 
-# The bottle / jar / dish pictures of the Fridge tab, in "design units" (like pixels, y = 0 at the TOP).
+# The container pictures of the Fridge tab (jar, bottle, ...), version 4.5. For each one,
+# assets/icons/containers.json (written by tools/make_assets.py) holds, in pixels (y = 0 at the TOP):
 #   size  - width and height of the picture
-#   label - (left, top, right, bottom) of the cream label where the app writes the item's name
-# tools/make_assets.py draws the pictures from these numbers and the app places the name with them,
-# so the two always agree.
-CONTAINER_ART = {
-    "jar": {"size": (300, 256), "label": (54, 108, 250, 206)},
-    "bottle": {"size": (200, 300), "label": (30, 150, 170, 250)},
-    "dish": {"size": (300, 256), "label": (62, 144, 238, 214)},
-    "carton": {"size": (200, 300), "label": (34, 150, 166, 250)},     # version 4.4: five more containers
-    "can": {"size": (220, 256), "label": (30, 92, 190, 180)},
-    "tub": {"size": (300, 230), "label": (72, 92, 228, 176)},
-    "box": {"size": (300, 220), "label": (64, 88, 236, 142)},
-    "basket": {"size": (300, 240), "label": (70, 136, 230, 200)},
-}
+#   label - (left, top, right, bottom) of the cream sticker where the app writes the item's name
+# Because the app reads this file, replacing a picture (see assets/icons/custom/README.txt) just works.
+def _load_container_art():
+    import json                                          # local import: only needed here
+    with open(os.path.join(ICONS_DIR, "containers.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+CONTAINER_ART = _load_container_art()
 
 
 def icon(name):

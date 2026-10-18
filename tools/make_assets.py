@@ -11,7 +11,7 @@ WHY THIS FILE EXISTS:
     so phones never need the font - this script is NOT part of the app itself.
 
 RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
-ONLY THE JAR / BOTTLE / DISH ICONS: .\.venv\Scripts\python tools\make_assets.py containers
+ONLY THE FRIDGE CONTAINER PICTURES: .\.venv\Scripts\python tools\make_assets.py containers
 ONLY THE WOOD / LEATHER TEXTURES:  .\.venv\Scripts\python tools\make_assets.py textures
 """
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont   # noqa: E402
 
-from app.images import CONTAINER_ART, ICONS_DIR, RECIPE_IMAGES_DIR, gradient   # noqa: E402
+from app.images import ICONS_DIR, RECIPE_IMAGES_DIR, gradient   # noqa: E402
 from app.seed_recipes import SEED_RECIPES                       # noqa: E402
 
 EMOJI_FONT = "seguiemj.ttf"          # Windows colour emoji font
@@ -187,277 +187,117 @@ def make_icon(char, out_path, size=128):
     icon.save(out_path, "PNG")
 
 
-def _icon_canvas(kind):
-    """A transparent canvas 4x bigger than the final picture (shrinking it later smooths the edges).
+# ----------------------------------------------------------------------------------------------
+# FRIDGE CONTAINER PICTURES (version 4.5)
+# ----------------------------------------------------------------------------------------------
+# Each container (jar, bottle, ...) is a 3D picture. It comes from, in this order:
+#   1. YOUR OWN picture, if you put one in  assets/icons/custom/<kind>.png  (e.g. custom/jar.png)
+#   2. otherwise Microsoft's free "Fluent Emoji 3D" set (MIT licence, see assets/icons/FLUENT_LICENSE.txt)
+# The tool trims the empty space around the picture, saves it as assets/icons/container_<kind>.png,
+# makes the mouldy "expired" version, and writes assets/icons/containers.json - the picture sizes
+# and where the app puts the cream name sticker. The app reads that file, so new pictures just work.
+FLUENT_URL = "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/{0}/3D/{1}_3d.png"
+CUSTOM_DIR = os.path.join(ICONS_DIR, "custom")           # drop your own <kind>.png files here
 
-    Returns (image, drawer, s): s() turns design units (see CONTAINER_ART) into canvas pixels.
-    """
-    w, h = CONTAINER_ART[kind]["size"]
-    big = Image.new("RGBA", (w * 4, h * 4), (0, 0, 0, 0))
-    return big, ImageDraw.Draw(big), lambda *v: [round(x * 4) for x in v]
+# kind -> (Fluent emoji name, where the name sticker goes as fractions of the picture:
+#          centre x, centre y (from the top), width, height)
+CONTAINER_SOURCES = {
+    "jar": ("Jar", (0.50, 0.55, 0.74, 0.27)),
+    "bottle": ("Sake", (0.50, 0.66, 0.80, 0.24)),            # only the bottle - the cup is cut away
+    "dish": ("Curry rice", (0.50, 0.78, 0.62, 0.27)),
+    "carton": ("Beverage box", (0.47, 0.64, 0.74, 0.24)),
+    "can": ("Canned food", (0.50, 0.52, 0.78, 0.27)),
+    "tub": ("Bowl with spoon", (0.50, 0.74, 0.64, 0.27)),
+    "box": ("Bento box", (0.50, 0.76, 0.60, 0.27)),
+    "basket": ("Basket", (0.50, 0.76, 0.60, 0.25)),
+    "pot": ("Pot of food", (0.50, 0.78, 0.54, 0.24)),
+    "glass": ("Glass of milk", (0.50, 0.60, 0.68, 0.22)),
+    "greens": ("Leafy green", (0.50, 0.62, 0.66, 0.24)),
+    "takeout": ("Takeout box", (0.50, 0.70, 0.60, 0.24)),
+}
 
 
-def _label_box(kind):
-    """Where the cream name label goes (the app writes the item's name on it)."""
-    return CONTAINER_ART[kind]["label"]
+def _download_fluent(name):
+    """Download one Fluent Emoji 3D picture (256 x 256 PNG) and return it as an image."""
+    import io, ssl, urllib.parse, urllib.request
+    import certifi                                         # trusted certificates for HTTPS
+    url = FLUENT_URL.format(urllib.parse.quote(name), name.lower().replace(" ", "_"))
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(url, context=context, timeout=30) as answer:
+        return Image.open(io.BytesIO(answer.read())).convert("RGBA")
 
 
-def _gone_bad(img, kind):
+def _only_the_bottle(img):
+    """The Fluent 'sake' picture is a bottle WITH a small cup in front of it. Keep only the bottle:
+    cut off the left part, and repaint the corner the cup hid with the bottle's own left-side shade."""
+    img = img.crop((108, 0, img.width, img.height))        # the bottle starts at x = 108
+    px, centre = img.load(), 67                            # the bottle's middle (measured)
+    alpha = img.getchannel("A")
+    bottom = max(y for y in range(img.height) if alpha.getpixel((centre, y)) > 128)
+    for y in range(150, img.height):                       # the cup covered the rows from y = 150 down
+        for x in range(centre):
+            mirror = px[2 * centre - x, y]                 # the bottle is symmetric: its outline...
+            r, g, b, _ = px[x, 149]                        # ...and the colour just above the cup
+            shade = 0.96 if y >= bottom - 10 else 1        # slightly darker at the very bottom
+            px[x, y] = (int(r * shade), int(g * shade), int(b * shade), mirror[3])
+    return img
+
+
+def _trim(img, pad=0.04):
+    """Cut away the empty transparent border, then leave a small even margin."""
+    img = img.crop(img.getchannel("A").getbbox())
+    m = int(max(img.size) * pad)
+    framed = Image.new("RGBA", (img.width + 2 * m, img.height + 2 * m), (0, 0, 0, 0))
+    framed.alpha_composite(img, (m, m))
+    return framed
+
+
+def _gone_bad(img, label_box, seed):
     """The 'expired' look: tint the whole picture green and sprinkle darker mould spots on it.
-
-    No spots on the label, so the item's name stays readable.
-    """
-    rgba = img.copy()
+    No spots on the name sticker, so the item's name stays readable."""
     green = Image.new("RGBA", img.size, (118, 176, 78, 255))          # mouldy green
-    tinted = Image.blend(rgba, green, 0.55)                            # 55 % green over the colours
+    tinted = Image.blend(img, green, 0.5)                              # half green over the colours
     spots = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(spots)
-    rng = random.Random(kind)                                          # same spots every run
-    left, top, right, bottom = _label_box(kind)
+    rng = random.Random(seed)                                          # same spots every run
+    left, top, right, bottom = label_box
     placed = 0
     while placed < 12:
         r = rng.randint(img.width // 40, img.width // 18)
         x, y = rng.randint(0, img.width), rng.randint(img.height // 6, img.height)
-        if left - r < x < right + r and top - r < y < bottom + r:     # would touch the label: skip
+        if left - r < x < right + r and top - r < y < bottom + r:     # would touch the sticker: skip
             continue
         placed += 1
-        d.ellipse([x - r, y - r, x + r, y + r], fill=(70, 120, 50, 170))
+        d.ellipse([x - r, y - r, x + r, y + r], fill=(60, 110, 45, 150))
     tinted = Image.alpha_composite(tinted, spots)
     tinted.putalpha(img.getchannel("A"))                               # keep the original outline
     return tinted
 
 
-def _finish_icon(big, kind, shadow_box):
-    """Add a soft shadow, shrink to the final size and save the normal + the expired picture."""
-    shadow = soft_shadow(big.size, shadow_box, 40, 70)                 # blurred ellipse under it
-    base = Image.new("RGBA", big.size, (0, 0, 0, 0))
-    base.paste((20, 40, 70, 255), (0, 0), shadow)                      # dark blue-grey shadow...
-    base.alpha_composite(big)                                          # ...with the drawing on top
-    final = base.resize(CONTAINER_ART[kind]["size"], Image.LANCZOS)
-    final.save(os.path.join(ICONS_DIR, f"container_{kind}.png"), "PNG")
-    _gone_bad(final, kind).save(os.path.join(ICONS_DIR, f"container_{kind}_expired.png"), "PNG")
-
-
-def _gradient(size, stops, horizontal=False):
-    """An RGBA picture filled with a colour gradient through `stops` = [(position 0-1, RGBA), ...].
-    horizontal=True runs left -> right (round things: dark edges, bright highlight = 3D)."""
-    w, h = size
-    n = w if horizontal else h
-    strip = Image.new("RGBA", (n, 1))
-    px = strip.load()
-    for i in range(n):
-        t = i / max(n - 1, 1)
-        for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
-            if t <= p1 or p1 == stops[-1][0]:
-                k = (t - p0) / (p1 - p0) if p1 > p0 else 0
-                px[i, 0] = tuple(int(a + (b - a) * min(max(k, 0), 1)) for a, b in zip(c0, c1))
-                break
-    if horizontal:
-        return strip.resize((w, h), Image.NEAREST)
-    return strip.resize((h, 1)).transpose(Image.ROTATE_270).resize((w, h), Image.NEAREST)
-
-
-class _Filled:
-    """Wraps an ImageDraw so every shape is FILLED (Pillow otherwise draws only the outline)."""
-
-    def __init__(self, draw):
-        self.draw = draw
-
-    def __getattr__(self, name):
-        method = getattr(self.draw, name)
-        return lambda *args, **kwargs: method(*args, **{"fill": 255, **kwargs})
-
-
-def _shape(big, draw, fill):
-    """Paint `fill` (a gradient picture) inside the shape that `draw(ImageDraw)` draws."""
-    mask = Image.new("L", big.size, 0)
-    draw(_Filled(ImageDraw.Draw(mask)))
-    layer = Image.new("RGBA", big.size, (0, 0, 0, 0))
-    layer.paste(fill, (0, 0), mask)
-    big.alpha_composite(layer)
-
-
-def _mix(c, other, k):
-    """Blend colour c towards `other` by k (0-1). Works on RGB or RGBA tuples."""
-    return tuple(int(a + (b - a) * k) for a, b in zip(c, other))
-
-
-def _round(c, alpha=255):
-    """Gradient stops that make a flat colour look round (cylinder): dark edge, bright highlight."""
-    c = tuple(c[:3]) + (alpha,)
-    dark, light = _mix(c, (0, 0, 0, alpha), 0.28), _mix(c, (255, 255, 255, alpha), 0.45)
-    return [(0, dark), (0.16, light), (0.42, c), (0.85, _mix(c, (0, 0, 0, alpha), 0.12)), (1, dark)]
-
-
-def _label(big, s, box, accent=None):
-    """The cream name label (the app writes the item's name on it), softly shaded."""
-    _shape(big, lambda d: d.rounded_rectangle(s(*box), radius=36),
-           _gradient(big.size, [(0, (255, 252, 243, 255)), (1, (243, 233, 212, 255))]))
-    d = ImageDraw.Draw(big)
-    l, t, r, b = box
-    d.rounded_rectangle(s(*box), radius=36, outline=(225, 208, 178, 255), width=6)
-    if accent:                                            # two thin coloured stripes, like printing
-        d.line(s(l + 8, t + 7, r - 8, t + 7), fill=accent, width=8)
-        d.line(s(l + 8, b - 7, r - 8, b - 7), fill=accent, width=8)
-
-
-def _shine(big, s, box, alpha=150, radius=24):
-    """A soft white reflection (glossy plastic / glass)."""
-    layer = Image.new("RGBA", big.size, (0, 0, 0, 0))
-    ImageDraw.Draw(layer).rounded_rectangle(s(*box), radius=radius, fill=(255, 255, 255, alpha))
-    big.alpha_composite(layer.filter(ImageFilter.GaussianBlur(3)))
-
-
-def make_jar_icon():
-    """A glass jar with a golden lid (pickles, rice, onions, spices...)."""
-    big, d, s = _icon_canvas("jar")
-    _shape(big, lambda d: d.rounded_rectangle(s(30, 64, 270, 244), radius=200),
-           _gradient(big.size, _round((206, 232, 248), 240), horizontal=True))           # glass body
-    d.rounded_rectangle(s(30, 64, 270, 244), radius=200, outline=(150, 192, 222, 255), width=14)
-    _shape(big, lambda d: d.rectangle(s(76, 50, 224, 70)),
-           _gradient(big.size, _round((186, 214, 234)), horizontal=True))                 # neck
-    _shape(big, lambda d: d.rounded_rectangle(s(58, 12, 242, 56), radius=48),
-           _gradient(big.size, _round((247, 186, 64)), horizontal=True))                  # golden lid
-    for x in range(84, 230, 22):                                                        # lid ridges
-        d.line(s(x, 18, x, 50), fill=(212, 146, 40, 150), width=8)
-    _shine(big, s, (44, 84, 58, 226), 170)
-    _shine(big, s, (74, 18, 130, 26), 140, radius=12)
-    _label(big, s, _label_box("jar"))
-    _finish_icon(big, "jar", s(30, 228, 270, 256))
-
-
-def make_bottle_icon():
-    """A glass bottle with a red cap (sauces, oil, water...)."""
-    big, d, s = _icon_canvas("bottle")
-    body = lambda d: (d.rounded_rectangle(s(30, 110, 170, 292), radius=150),
-                      d.polygon([tuple(s(82, 62)), tuple(s(118, 62)), tuple(s(170, 130)), tuple(s(30, 130))]),
-                      d.rectangle(s(82, 32, 118, 80)))
-    _shape(big, body, _gradient(big.size, _round((206, 116, 52)), horizontal=True))      # amber glass
-    _shape(big, lambda d: d.rounded_rectangle(s(74, 4, 126, 40), radius=28),
-           _gradient(big.size, _round((232, 80, 70)), horizontal=True))                   # cap
-    d.rectangle(s(74, 32, 126, 40), fill=(180, 56, 52, 255))
-    _shine(big, s, (42, 120, 54, 284), 120)
-    _label(big, s, _label_box("bottle"), accent=(226, 86, 72, 255))
-    _finish_icon(big, "bottle", s(30, 276, 170, 300))
-
-
-def make_dish_icon():
-    """A bowl of food under a clear lid (leftovers, cooked rice, curries...)."""
-    big, d, s = _icon_canvas("dish")
-    _shape(big, lambda d: d.chord(s(62, 34, 238, 206), 180, 360),
-           _gradient(big.size, [(0, (232, 245, 255, 190)), (1, (190, 220, 246, 130))]))   # clear dome
-    d.chord(s(62, 34, 238, 206), 180, 360, outline=(150, 192, 224, 255), width=12)
-    _shape(big, lambda d: d.ellipse(s(136, 20, 164, 44)),
-           _gradient(big.size, _round((168, 196, 220)), horizontal=True))                 # knob
-    _shape(big, lambda d: d.ellipse(s(38, 102, 262, 142)),
-           _gradient(big.size, [(0, (246, 168, 86, 255)), (1, (208, 112, 52, 255))]))    # curry
-    for x, y in ((92, 112), (138, 106), (186, 116), (118, 124), (214, 110)):           # garnish
-        d.ellipse(s(x, y, x + 16, y + 11), fill=(96, 168, 86, 255))
-    _shape(big, lambda d: d.chord(s(20, 8, 280, 248), 0, 180),
-           _gradient(big.size, [(0, (255, 255, 255, 255)), (0.5, (255, 255, 255, 255)),
-                                (1, (232, 222, 210, 255))]))                              # china bowl
-    _shape(big, lambda d: d.chord(s(20, 8, 280, 248), 0, 180),
-           _gradient(big.size, [(0, (0, 0, 0, 0)), (0.85, (0, 0, 0, 0)), (0.86, (64, 168, 160, 255)),
-                                (0.9, (64, 168, 160, 255)), (0.91, (0, 0, 0, 0)), (1, (0, 0, 0, 0))]))   # teal stripe
-    d.line(s(22, 128, 278, 128), fill=(236, 226, 212, 255), width=14)                  # rim
-    _shine(big, s, (92, 54, 150, 64), 160, radius=10)
-    _label(big, s, _label_box("dish"))
-    _finish_icon(big, "dish", s(60, 232, 240, 256))
-
-
-def make_carton_icon():
-    """A milk / juice carton with a folded top."""
-    big, d, s = _icon_canvas("carton")
-    _shape(big, lambda d: d.rounded_rectangle(s(34, 94, 166, 290), radius=40),
-           _gradient(big.size, _round((250, 250, 252)), horizontal=True))                 # white box
-    _shape(big, lambda d: d.polygon([tuple(s(34, 96)), tuple(s(100, 40)), tuple(s(166, 96))]),
-           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # blue roof
-    _shape(big, lambda d: d.rounded_rectangle(s(84, 16, 116, 50), radius=12),
-           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # top fin
-    _shape(big, lambda d: d.rectangle(s(34, 96, 166, 132)),
-           _gradient(big.size, _round((86, 156, 236)), horizontal=True))                  # blue band
-    _shine(big, s, (44, 140, 54, 280), 130)
-    _label(big, s, _label_box("carton"), accent=(86, 156, 236, 255))
-    _finish_icon(big, "carton", s(34, 276, 166, 300))
-
-
-def make_can_icon():
-    """A tin can (beans, tomatoes, coconut milk...)."""
-    big, d, s = _icon_canvas("can")
-    _shape(big, lambda d: d.rounded_rectangle(s(20, 34, 200, 236), radius=28),
-           _gradient(big.size, _round((206, 212, 220)), horizontal=True))                 # steel body
-    _shape(big, lambda d: d.rectangle(s(20, 60, 200, 212)),
-           _gradient(big.size, _round((222, 72, 72)), horizontal=True))                   # red print
-    _shape(big, lambda d: d.ellipse(s(20, 18, 200, 50)),
-           _gradient(big.size, [(0, (238, 242, 246, 255)), (1, (178, 186, 196, 255))]))  # lid
-    d.ellipse(s(34, 24, 186, 44), outline=(160, 168, 180, 255), width=8)
-    for y in (60, 212):                                                                 # rims
-        d.line(s(20, y, 200, y), fill=(160, 168, 180, 255), width=10)
-    _shine(big, s, (32, 66, 42, 206), 110)
-    _label(big, s, _label_box("can"))
-    _finish_icon(big, "can", s(20, 222, 200, 256))
-
-
-def make_tub_icon():
-    """A plastic tub with a lid (curd, yogurt, butter, ice cream...)."""
-    big, d, s = _icon_canvas("tub")
-    _shape(big, lambda d: d.polygon([tuple(s(40, 64)), tuple(s(260, 64)), tuple(s(240, 210)), tuple(s(60, 210))]),
-           _gradient(big.size, _round((252, 250, 246)), horizontal=True))                 # white tub
-    d.line(s(60, 210, 240, 210), fill=(214, 206, 196, 255), width=10)
-    _shape(big, lambda d: d.rounded_rectangle(s(26, 36, 274, 70), radius=40),
-           _gradient(big.size, _round((84, 198, 170)), horizontal=True))                  # mint lid
-    _shine(big, s, (58, 42, 160, 50), 150, radius=10)
-    _shine(big, s, (54, 80, 66, 196), 120)
-    _label(big, s, _label_box("tub"), accent=(84, 198, 170, 255))
-    _finish_icon(big, "tub", s(56, 202, 244, 230))
-
-
-def make_box_icon():
-    """A glass food box with a snap-on lid (meal prep, cut fruit, takeaway...)."""
-    big, d, s = _icon_canvas("box")
-    _shape(big, lambda d: d.rounded_rectangle(s(24, 70, 276, 204), radius=110),
-           _gradient(big.size, _round((214, 236, 250), 230), horizontal=True))            # glass box
-    _shape(big, lambda d: d.rounded_rectangle(s(36, 150, 264, 196), radius=70),
-           _gradient(big.size, [(0, (252, 240, 210, 255)), (1, (236, 214, 170, 255))]))  # rice inside
-    for x in (60, 110, 196, 236):                                                       # peas / greens
-        d.ellipse(s(x, 158, x + 18, 172), fill=(104, 174, 92, 255))
-    d.rounded_rectangle(s(24, 70, 276, 204), radius=110, outline=(150, 192, 222, 255), width=12)
-    _shape(big, lambda d: d.rounded_rectangle(s(14, 44, 286, 80), radius=50),
-           _gradient(big.size, _round((112, 136, 232)), horizontal=True))                 # violet lid
-    for x in (34, 246):                                                                 # the snap clips
-        _shape(big, lambda d, x=x: d.rounded_rectangle(s(x, 66, x + 20, 100), radius=20),
-               _gradient(big.size, _round((92, 112, 208)), horizontal=True))
-    _shine(big, s, (60, 50, 170, 58), 150, radius=10)
-    _label(big, s, _label_box("box"))
-    _finish_icon(big, "box", s(24, 196, 276, 220))
-
-
-def make_basket_icon():
-    """A wooden crate of fresh vegetables (onions, tomatoes, potatoes, greens...)."""
-    big, d, s = _icon_canvas("basket")
-    veg = [((40, 54, 116, 130), (236, 76, 64)),       # tomato
-           ((96, 30, 176, 110), (96, 176, 84)),       # broccoli / greens
-           ((150, 50, 222, 122), (154, 98, 196)),     # aubergine / onion
-           ((196, 60, 262, 126), (246, 156, 52))]     # orange / carrot
-    for box, color in veg:                                                              # round, shiny veg
-        _shape(big, lambda d, b=box: d.ellipse(s(*b)), _gradient(big.size, _round(color), horizontal=True))
-    d.ellipse(s(64, 62, 80, 74), fill=(255, 255, 255, 170))
-    d.line(s(78, 54, 84, 40), fill=(80, 150, 70, 255), width=12)                       # tomato stalk
-    _shape(big, lambda d: d.rounded_rectangle(s(22, 98, 278, 230), radius=40),
-           _gradient(big.size, [(0, (214, 160, 102, 255)), (1, (170, 112, 62, 255))]))    # wooden crate
-    for y in (124, 176):                                                                # slats
-        d.line(s(26, y, 274, y), fill=(150, 98, 54, 255), width=8)
-    d.rounded_rectangle(s(22, 98, 278, 230), radius=40, outline=(146, 94, 50, 255), width=10)
-    _label(big, s, _label_box("basket"))
-    _finish_icon(big, "basket", s(22, 218, 278, 240))
-
-
 def make_container_icons():
-    """Every picture a fridge item can be shown as, plus their 'expired' (mouldy) versions."""
-    for make in (make_jar_icon, make_bottle_icon, make_dish_icon, make_carton_icon, make_can_icon,
-                 make_tub_icon, make_box_icon, make_basket_icon):
-        make()
-    print("container icons -> assets/icons/container_*.png")
+    """Make every container picture (+ expired version) and assets/icons/containers.json."""
+    import json
+    art = {}
+    for kind, (fluent_name, (cx, cy, fw, fh)) in CONTAINER_SOURCES.items():
+        custom = os.path.join(CUSTOM_DIR, f"{kind}.png")
+        if os.path.exists(custom):                         # 1. your own picture wins
+            img, source = Image.open(custom).convert("RGBA"), "custom"
+        else:                                              # 2. the Fluent 3D picture
+            img, source = _download_fluent(fluent_name), "Fluent 3D"
+            if kind == "bottle":
+                img = _only_the_bottle(img)
+        img = _trim(img)
+        if max(img.size) > 320:                            # big custom pictures: shrink (keeps the app small)
+            img.thumbnail((320, 320), Image.LANCZOS)
+        w, h = img.size
+        label = [round((cx - fw / 2) * w), round((cy - fh / 2) * h),     # left, top,
+                 round((cx + fw / 2) * w), round((cy + fh / 2) * h)]     # right, bottom (y = 0 at the top)
+        img.save(os.path.join(ICONS_DIR, f"container_{kind}.png"), "PNG")
+        _gone_bad(img, label, kind).save(os.path.join(ICONS_DIR, f"container_{kind}_expired.png"), "PNG")
+        art[kind] = {"size": [w, h], "label": label}
+        print(f"container {kind:8} {w}x{h}  ({source})")
+    with open(os.path.join(ICONS_DIR, "containers.json"), "w", encoding="utf-8") as f:
+        json.dump(art, f, indent=2)                        # the app reads sizes + sticker spots from here
 
 
 def _streaks(size, rows, sigma, seed):
@@ -525,7 +365,7 @@ def make_textures():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only redraw these 3
+    if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only the fridge container pictures
         make_container_icons()
         sys.exit()
     if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather

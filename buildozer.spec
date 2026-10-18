@@ -14,13 +14,13 @@ package.name = fridgechef
 package.domain = org.fridgechef
 # Where the source code is (this folder) and which file types to include in the APK.
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf
+source.include_exts = py,png,jpg,jpeg,ttf,json
 # Folders that must NOT be packed into the APK: tests, the desktop virtual environment, the web
 # server (it runs on a computer, not the phone) and the developer asset tools.
 # The assets/ folder (recipe pictures, icons, rounded UI shapes) IS included.
 source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs
 # App version shown in Android settings.
-version = 4.4.0
+version = 4.5.0
 # Python packages bundled into the APK:
 #   pyjnius  - lets Python call Android Java APIs (share sheet, gallery)
 #   sqlite3  - the local database (on Android it is only built when listed here)

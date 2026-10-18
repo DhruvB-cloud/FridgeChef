@@ -29,14 +29,19 @@ APPLIANCES = ["Stove", "Rice Cooker", "Oven", "Microwave"]
 CATEGORIES = ["Fridge", "Outside"]   # "Outside" = cupboard / shelf, i.e. not refrigerated
 
 # What an item is kept in - decides its picture and its place in the fridge drawing
-# (version 4.1: jar / bottle / dish; version 4.4 adds carton, can, tub, food box and basket).
-CONTAINERS = ["jar", "bottle", "dish", "carton", "can", "tub", "box", "basket"]
+# (version 4.1: jar / bottle / dish; 4.4 adds carton, can, tub, food box, basket; 4.5 adds cooking
+#  pot, glass, greens and takeout box - 12 in total).
+CONTAINERS = ["jar", "bottle", "dish", "carton", "can", "tub", "box", "basket",
+              "pot", "glass", "greens", "takeout"]
 CONTAINER_LABELS = {"jar": "Glass jar", "bottle": "Bottle", "dish": "Dish", "carton": "Carton",
-                    "can": "Can", "tub": "Tub", "box": "Food box", "basket": "Basket"}   # names in the form
+                    "can": "Can", "tub": "Tub", "box": "Food box", "basket": "Basket",
+                    "pot": "Cooking pot", "glass": "Glass", "greens": "Greens",
+                    "takeout": "Takeout box"}                                     # names in the form
 # Where each container stands in the fridge picture.
 CONTAINER_PLACE = {"jar": "shelves", "tub": "shelves", "can": "shelves", "basket": "shelves",
-                   "dish": "leftovers", "box": "leftovers",
-                   "bottle": "door", "carton": "door"}
+                   "greens": "shelves",
+                   "dish": "leftovers", "box": "leftovers", "pot": "leftovers", "takeout": "leftovers",
+                   "bottle": "door", "carton": "door", "glass": "door"}
 
 # Water is always in the fridge (version 4.1): it never expires, never runs out and can't be removed.
 WATER_NAME = "Water"
