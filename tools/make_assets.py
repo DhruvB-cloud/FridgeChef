@@ -13,6 +13,7 @@ WHY THIS FILE EXISTS:
 RUN (from the FridgeChef folder):   .\.venv\Scripts\python tools\make_assets.py
 ONLY THE FRIDGE CONTAINER PICTURES: .\.venv\Scripts\python tools\make_assets.py containers
 ONLY THE WOOD / LEATHER TEXTURES:  .\.venv\Scripts\python tools\make_assets.py textures
+ONLY THE SMALL ICONS + APP ICON:    .\.venv\Scripts\python tools\make_assets.py icons
 """
 
 import os
@@ -79,6 +80,18 @@ ICONS = {
     "heart": "\U0001F496",           # sparkling heart - the "love" easter egg
     "party": "\U0001F389",           # party popper - the "Yay, you cooked!" message
     "camera": "\U0001F4F7",          # camera - add a photo of your dish
+}
+
+
+# Version 4.6: the small icons (tab bar, headers, Profile tab...) use Microsoft's Fluent Emoji 3D
+# pictures - the same glossy 3D style as the fridge containers. icon name -> Fluent emoji name.
+# (An icon missing here, or a failed download, falls back to the Windows emoji font above.)
+FLUENT_ICONS = {
+    "tab_fridge": "Broccoli", "tab_recipes": "Pot of food", "tab_cookbook": "Open book",
+    "tab_calendar": "Calendar", "tab_profile": "Cook",          # a chef, not just a person
+    "fire": "Fire", "trophy": "Trophy", "star": "Star", "plate": "Fork and knife with plate",
+    "muscle": "Flexed biceps", "grain": "Sheaf of rice", "bolt": "High voltage", "timer": "Stopwatch",
+    "heart": "Sparkling heart", "party": "Party popper", "camera": "Camera",
 }
 
 
@@ -164,10 +177,11 @@ def make_ui_shapes():
 
 
 def make_app_icon(out_path, size=512):
-    """The launcher icon on the phone's home screen: a sage-green rounded square with a pot of food."""
+    """The launcher icon on the phone's home screen: an emerald rounded square, a white plate and
+    the 3D pot of food (version 4.6; the emoji font is used if the download fails)."""
     s = 4                                                   # draw 4x bigger, then shrink = smooth edges
     big = Image.new("RGBA", (size * s, size * s), (0, 0, 0, 0))
-    bg = gradient((size * s, size * s), (150, 200, 158), (95, 160, 108)).convert("RGBA")   # light -> darker sage
+    bg = gradient((size * s, size * s), (84, 199, 133), (26, 140, 107)).convert("RGBA")   # light -> deep emerald
     mask = Image.new("L", bg.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, bg.width - 1, bg.height - 1], radius=size * s // 5, fill=255)
     big.paste(bg, (0, 0), mask)                             # rounded green square
@@ -175,16 +189,33 @@ def make_app_icon(out_path, size=512):
     off = (size * s - plate) // 2
     ImageDraw.Draw(big).ellipse([off, off, off + plate, off + plate], fill=(255, 255, 255, 255))
     icon = big.resize((size, size), Image.LANCZOS)
-    pot = emoji_image("\U0001F372", int(size * 0.46))       # the pot-of-food emoji on the plate
+    try:
+        pot = _download_fluent("Pot of food")              # the 3D pot of food on the plate
+        pot = pot.crop(pot.getchannel("A").getbbox())
+        pot.thumbnail((int(size * 0.5), int(size * 0.5)), Image.LANCZOS)
+    except OSError:
+        pot = emoji_image("\U0001F372", int(size * 0.46))   # fallback: the emoji font
     icon.alpha_composite(pot, ((size - pot.width) // 2, (size - pot.height) // 2))
     icon.save(out_path, "PNG")
 
 
-def make_icon(char, out_path, size=128):
+def make_icon(name, char, out_path, size=128):
+    """One small square icon: the Fluent 3D picture if there is one, else the emoji `char`."""
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    glyph = emoji_image(char, int(size * 0.86))
-    icon.alpha_composite(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2))
+    glyph, source = None, "emoji font"
+    if name in FLUENT_ICONS:
+        try:
+            glyph = _download_fluent(FLUENT_ICONS[name])
+            glyph = glyph.crop(glyph.getchannel("A").getbbox())     # cut away the empty border
+            glyph.thumbnail((int(size * 0.92), int(size * 0.92)), Image.LANCZOS)   # fit, keep the shape
+            source = "Fluent 3D"
+        except OSError as error:                                   # no internet: use the emoji font
+            print(f"  (could not download {FLUENT_ICONS[name]}: {error})")
+    if glyph is None:
+        glyph = emoji_image(char, int(size * 0.86))
+    icon.alpha_composite(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2))   # centred
     icon.save(out_path, "PNG")
+    print(f"icon: {name:13} ({source})")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -221,10 +252,17 @@ def _download_fluent(name):
     """Download one Fluent Emoji 3D picture (256 x 256 PNG) and return it as an image."""
     import io, ssl, urllib.parse, urllib.request
     import certifi                                         # trusted certificates for HTTPS
-    url = FLUENT_URL.format(urllib.parse.quote(name), name.lower().replace(" ", "_"))
+    folder, file = urllib.parse.quote(name), name.lower().replace(" ", "_")
     context = ssl.create_default_context(cafile=certifi.where())
-    with urllib.request.urlopen(url, context=context, timeout=30) as answer:
-        return Image.open(io.BytesIO(answer.read())).convert("RGBA")
+    urls = [FLUENT_URL.format(folder, file),                                    # most pictures
+            FLUENT_URL.replace("/3D/", "/Default/3D/").format(folder, file).replace("_3d.png", "_3d_default.png")]
+    for url in urls:                                       # people / hands: the "Default" skin-tone folder
+        try:
+            with urllib.request.urlopen(url, context=context, timeout=30) as answer:
+                return Image.open(io.BytesIO(answer.read())).convert("RGBA")
+        except urllib.error.HTTPError:                     # 404 = not in this folder: try the next one
+            continue
+    raise OSError(f"no Fluent 3D picture called {name!r}")
 
 
 def _only_the_bottle(img):
@@ -371,6 +409,11 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather
         make_textures()
         sys.exit()
+    if sys.argv[1:] == ["icons"]:                 # "make_assets.py icons" = only the small icons + app icon
+        for name, char in ICONS.items():
+            make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
+        make_app_icon(os.path.join(os.path.dirname(ICONS_DIR), "app_icon.png"))
+        sys.exit()
     os.makedirs(RECIPE_IMAGES_DIR, exist_ok=True)
     os.makedirs(ICONS_DIR, exist_ok=True)
     os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
@@ -382,8 +425,7 @@ if __name__ == "__main__":
         thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{recipe.uid}.jpg"), "JPEG", quality=85)
         print("recipe image:", recipe.uid)
     for name, char in ICONS.items():
-        make_icon(char, os.path.join(ICONS_DIR, f"{name}.png"))
-        print("icon:", name)
+        make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
     make_container_icons()
     make_textures()
     make_ui_shapes()
