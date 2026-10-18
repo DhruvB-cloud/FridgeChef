@@ -32,7 +32,7 @@ from app.meal_time import current_meal
 from app.models import CUISINES, NUTRITION_TAGS, SORT_OPTIONS
 from app.recipe_engine import filter_matches, match_all, recommend, sort_matches
 from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
-                            PRIMARY_SOFT, Card, Chip, Header, RecipeThumb, Scene, SoftInput,
+                            PRIMARY_SOFT, THUMB_RATIO, Card, Chip, Header, RecipeThumb, Scene, SoftInput,
                             SoftSpinner, SoftToggle, WrapLabel, colored, labeled, scroll_list)
 
 # Drop-down label -> value understood by recipe_engine.filter_matches().
@@ -252,7 +252,7 @@ class RecipesScreen(Screen):
         # ---- "Recommended for Lunch": a sideways strip of thumbnails
         inner.add_widget(caption(f"Recommended for {s['meal']}"))
         if s["recommended"]:
-            strip = SideScroller(size_hint_y=None, height=STRIP_THUMB + dp(70))   # up/down swipes scroll the page
+            strip = SideScroller(size_hint_y=None, height=STRIP_THUMB * THUMB_RATIO + dp(16))   # up/down swipes scroll the page
             row = BoxLayout(size_hint_x=None, spacing=dp(10), padding=(0, dp(2), 0, dp(6)))
             row.bind(minimum_width=row.setter("width"))  # row grows sideways with its thumbnails
             for m in s["recommended"]:
@@ -265,7 +265,7 @@ class RecipesScreen(Screen):
         inner.add_widget(caption(f"All recipes ({len(s['results'])})"))
         if not s["results"]:
             inner.add_widget(self._note("No recipes match these filters."))
-        grid = GridLayout(cols=self.cols, spacing=dp(10), size_hint_y=None)
+        grid = GridLayout(cols=self.cols, spacing=dp(12), size_hint_y=None)
         grid.bind(minimum_height=grid.setter("height"))
         for m in s["results"]:
             grid.add_widget(RecipeThumb(m, on_open=open_recipe))

@@ -19,7 +19,10 @@ import os
 from kivy.clock import Clock                            # run something on the next frame
 from kivy.loader import Loader                          # loads pictures on background threads
 from kivy.utils import platform                         # 'android', 'win', ... (keyboard fix below)
-from kivy.graphics import Color, Rectangle, RoundedRectangle   # low-level drawing instructions
+from kivy.core.text import LabelBase                    # register the app's own fonts
+from kivy.graphics import Color, Line, Rectangle, RoundedRectangle   # low-level drawing instructions
+from kivy.graphics.texture import Texture               # home-made gradient pictures
+from kivy.uix.floatlayout import FloatLayout            # layers: photo, shade, name, badges
 from kivy.metrics import dp, sp           # dp = density-independent pixels, sp = scaled font size
 from kivy.uix.behaviors import ButtonBehavior           # makes any widget clickable
 from kivy.uix.boxlayout import BoxLayout                # lays children out in a row or column
@@ -38,14 +41,26 @@ from kivy.uix.widget import Widget
 from app.images import ASSETS_DIR, resolve_image
 
 # ----------------------------------------------------------------------------------------------
+# FONTS (version 4.3) - Poppins, a modern rounded font (free, SIL Open Font License, see
+# assets/fonts/OFL.txt). Registering it under Kivy's default name "Roboto" switches EVERY label,
+# button and text box of the app to Poppins at once. "Display" is the heavy weight for big titles.
+# ----------------------------------------------------------------------------------------------
+FONTS_DIR = os.path.join(ASSETS_DIR, "fonts")
+_font = lambda name: os.path.join(FONTS_DIR, f"Poppins-{name}.ttf")
+LabelBase.register("Roboto", fn_regular=_font("Regular"), fn_italic=_font("Italic"),
+                   fn_bold=_font("SemiBold"), fn_bolditalic=_font("BoldItalic"))
+LabelBase.register("Display", fn_regular=_font("Bold"), fn_bold=_font("Bold"))
+DISPLAY = "Display"                                      # font_name for big headings
+
+# ----------------------------------------------------------------------------------------------
 # SOFT COLOUR PALETTE - Kivy uses (red, green, blue, alpha) with values from 0 to 1.
 # ----------------------------------------------------------------------------------------------
 BG = (0.973, 0.961, 0.937, 1)        # warm cream app background
 SURFACE = (1, 1, 1, 1)               # cards
-INK = (0.20, 0.22, 0.23, 1)          # main text (soft charcoal, not pure black)
+INK = (0.13, 0.16, 0.17, 1)          # main text (deep charcoal, not pure black)
 MUTED = (0.54, 0.56, 0.58, 1)        # secondary text
-PRIMARY = (0.43, 0.67, 0.47, 1)      # soft sage green - main buttons, active tab
-PRIMARY_DARK = (0.30, 0.52, 0.35, 1)  # sage for text on light backgrounds
+PRIMARY = (0.20, 0.64, 0.46, 1)      # fresh emerald green - main buttons, active tab
+PRIMARY_DARK = (0.12, 0.47, 0.34, 1)  # deep green for text on light backgrounds
 PRIMARY_SOFT = (0.89, 0.95, 0.89, 1)  # very light sage - highlights
 PEACH = (0.96, 0.66, 0.53, 1)        # warm accent (streak, share)
 PEACH_SOFT = (0.99, 0.93, 0.89, 1)
@@ -63,6 +78,17 @@ NONVEG_FILL = (1.0, 0.88, 0.88, 1)   # light red    - meat, chicken, fish...
 EGG_FILL = (1.0, 0.96, 0.78, 1)      # light yellow - eggs
 VEG_FILL = (0.86, 0.95, 0.86, 1)     # light green  - everything vegetarian
 WHITE = (1, 1, 1, 1)
+
+# Gradients: (top colour, bottom colour). Buttons, the active tab and header badges use these.
+GRAD_PRIMARY = ((0.33, 0.78, 0.52, 1), (0.10, 0.55, 0.42, 1))   # emerald
+GRAD_DANGER = ((1.00, 0.55, 0.45, 1), (0.89, 0.32, 0.36, 1))    # coral
+TAB_ACCENTS = {                                          # header badge colour of each tab
+    "tab_fridge": ((0.84, 0.92, 1.00, 1), (0.60, 0.78, 0.98, 1)),
+    "tab_recipes": ((1.00, 0.90, 0.70, 1), (0.98, 0.72, 0.42, 1)),
+    "tab_cookbook": ((1.00, 0.84, 0.76, 1), (0.88, 0.56, 0.44, 1)),
+    "tab_calendar": ((0.84, 0.95, 0.86, 1), (0.56, 0.82, 0.62, 1)),
+    "tab_profile": ((1.00, 0.86, 0.84, 1), (0.98, 0.62, 0.60, 1)),
+}
 
 # The same colours as hex text, for Kivy "markup" like "[color=d0605f]text[/color]".
 HEX_RED, HEX_AMBER, HEX_GREEN, HEX_GREY, HEX_INK = "d0605f", "c98a2e", "4f8a5b", "8a8f93", "33383b"
@@ -105,27 +131,58 @@ def ui_texture(name):
     return _TEXTURES[name]
 
 
-def bg_rect(widget, color, radius=0, shadow=False, texture=None):
+_GRADIENTS = {}                                         # (top, bottom) -> texture (make each once)
+
+
+def gradient_texture(top, bottom, steps=64):
+    """A tiny 1 x 64 picture fading from `top` to `bottom` (RGBA, 0-1). Stretched over a rounded
+    shape it paints a smooth vertical gradient. (A RoundedRectangle shows the FIRST row at the top.)"""
+    key = (tuple(top), tuple(bottom))
+    if key not in _GRADIENTS:
+        rows = []
+        for i in range(steps):                          # mix the two colours a bit more each row
+            t = i / (steps - 1)
+            rows.append(bytes(int(255 * (a * (1 - t) + b * t)) for a, b in zip(top, bottom)))
+        texture = Texture.create(size=(1, steps), colorfmt="rgba")
+        texture.blit_buffer(b"".join(rows), colorfmt="rgba", bufferfmt="ubyte")
+        texture.wrap = "clamp_to_edge"
+        _GRADIENTS[key] = texture
+    return _GRADIENTS[key]
+
+
+# Layered shadow: three soft shapes, each a little bigger and fainter = a blurred-looking shadow.
+SHADOW_LAYERS = ((dp(1), dp(2), 0.05), (dp(4), dp(5), 0.035), (dp(9), dp(9), 0.02))   # (spread, drop, alpha)
+
+
+def bg_rect(widget, color, radius=0, shadow=False, texture=None, gradient=None,
+            shadow_color=(0.30, 0.22, 0.15)):
     """Paint a (rounded) background behind any widget and keep it in sync when it moves/resizes.
 
-    shadow=True adds a very soft shadow slightly below the shape, which makes cards "float".
-    texture='oak.jpg' paints the shape with that picture (tinted by `color`; WHITE = true colours).
+    shadow=True        a soft, layered shadow below the shape, which makes cards "float".
+    texture='oak.jpg'  paints the shape with that picture (tinted by `color`; WHITE = true colours).
+    gradient=(top, bottom) paints a vertical colour gradient (then `color` works as a tint).
+    shadow_color       the shadow's colour (a coloured shadow looks like a glow).
     """
     with widget.canvas.before:                          # drawn BEFORE (= behind) the children
+        shadows = []
         if shadow:
-            Color(0, 0, 0, 0.06)
-            widget._shadow = RoundedRectangle(radius=[radius + dp(2)])
+            for spread, drop, alpha in SHADOW_LAYERS:
+                Color(*shadow_color, alpha)
+                shadows.append((RoundedRectangle(radius=[radius + spread]), spread, drop))
         widget._bg_color = Color(*color)
-        tex = ui_texture(texture) if texture else None
+        if gradient:
+            tex = gradient_texture(*gradient) if radius else gradient_texture(gradient[1], gradient[0])
+        else:
+            tex = ui_texture(texture) if texture else None
         widget._bg_rect = (RoundedRectangle(radius=[radius], texture=tex) if radius
                            else Rectangle(texture=tex))
 
     def _sync(*_):                                       # follow the widget when it moves/resizes
         widget._bg_rect.pos = widget.pos
         widget._bg_rect.size = widget.size
-        if shadow:
-            widget._shadow.pos = (widget.x - dp(1), widget.y - dp(3))
-            widget._shadow.size = (widget.width + dp(2), widget.height + dp(2))
+        for shape, spread, drop in shadows:
+            shape.pos = (widget.x - spread, widget.y - spread - drop)
+            shape.size = (widget.width + 2 * spread, widget.height + 2 * spread)
     widget.bind(pos=_sync, size=_sync)
     _sync()
 
@@ -212,7 +269,8 @@ def _round_background(widget, color):
 
 
 class SoftButton(Button):
-    """A rounded, softly coloured button."""
+    """A rounded button. Green (PRIMARY) and red (DANGER) buttons are glossy gradients with a soft
+    coloured glow underneath (version 4.3); all other colours are flat and soft."""
 
     def __init__(self, text="", bg=PRIMARY, fg=WHITE, **kwargs):
         kwargs.setdefault("size_hint_y", None)
@@ -220,12 +278,42 @@ class SoftButton(Button):
         kwargs.setdefault("font_size", sp(15))
         kwargs.setdefault("bold", True)
         super().__init__(text=text, color=fg, markup=True, **kwargs)
-        _round_background(self, bg)
+        with self.canvas.before:                        # the gradient look (hidden for flat colours)
+            self._glow = []
+            for spread, drop, alpha in ((dp(0), dp(3), 0.22), (dp(3), dp(6), 0.12)):
+                self._glow.append((Color(0, 0, 0, 0), RoundedRectangle(radius=[dp(16) + spread]),
+                                   spread, drop, alpha))
+            self._shine = Color(1, 1, 1, 0)             # 0 = hidden, 1 = shown (dimmed while pressed)
+            self._grad = RoundedRectangle(radius=[dp(16)])
+        self.bind(pos=self._sync, size=self._sync, state=self._sync)
+        self.set_colors(bg, fg)
 
     def set_colors(self, bg, fg):
         """Change colours later (e.g. Save -> Saved)."""
-        self.background_color = bg
         self.color = fg
+        gradient = {PRIMARY: GRAD_PRIMARY, DANGER: GRAD_DANGER}.get(tuple(bg))
+        self._gradient = gradient
+        if gradient:                                    # glossy gradient: hide Kivy's own background
+            self.background_normal = self.background_down = ""
+            self.background_color = (0, 0, 0, 0)
+            self._grad.texture = gradient_texture(*gradient)
+            for color, _shape, _spread, _drop, alpha in self._glow:
+                color.rgba = (*gradient[1][:3], alpha)  # glow in the button's own colour
+        else:                                           # flat soft colour (rounded 9-slice image)
+            _round_background(self, bg)
+            for color, *_ in self._glow:
+                color.a = 0
+        self._sync()
+
+    def _sync(self, *_):
+        self._grad.pos, self._grad.size = self.pos, self.size
+        for _color, shape, spread, drop, _alpha in self._glow:
+            shape.pos = (self.x + dp(6) - spread, self.y - drop - spread)
+            shape.size = (self.width - dp(12) + 2 * spread, self.height + 2 * spread - dp(4))
+        if self._gradient:
+            self._shine.rgba = (0.86, 0.86, 0.86, 1) if self.state == "down" else (1, 1, 1, 1)
+        else:
+            self._shine.a = 0
 
 
 class SoftToggle(ToggleButton):
@@ -243,7 +331,7 @@ class SoftToggle(ToggleButton):
 
     def _restyle(self, *_):
         on = self.state == "down"
-        self.background_color = PRIMARY if on else NEUTRAL
+        self.background_color = PRIMARY if on else WHITE   # white "glass" when off, green when on
         self.color = WHITE if on else INK
 
 
@@ -472,20 +560,22 @@ class Header(BoxLayout):
     a slot on the right (e.g. the 'Live' status chip on the Recipes tab)."""
 
     def __init__(self, title, subtitle="", on_back=None, icon=None, **kwargs):
-        super().__init__(size_hint_y=None, height=dp(72), padding=(dp(16), dp(10), dp(16), dp(6)),
+        super().__init__(size_hint_y=None, height=dp(78), padding=(dp(16), dp(12), dp(16), dp(6)),
                          spacing=dp(12), **kwargs)
         if on_back:
             self.add_widget(SoftButton("<", size_hint=(None, None), size=(dp(44), dp(44)),
                                        pos_hint={"center_y": 0.5}, bg=SURFACE, fg=INK,
                                        font_size=sp(20), on_release=lambda *_: on_back()))
-        if icon:                                         # the tab's icon in a soft rounded square
-            badge = BoxLayout(size_hint=(None, None), size=(dp(46), dp(46)), padding=dp(9),
+        if icon:                                         # the tab's icon on a glowing gradient badge
+            accent = TAB_ACCENTS.get(icon, ((1, 1, 1, 1), (0.92, 0.92, 0.92, 1)))
+            badge = BoxLayout(size_hint=(None, None), size=(dp(50), dp(50)), padding=dp(10),
                               pos_hint={"center_y": 0.5})
-            bg_rect(badge, SURFACE, radius=dp(15), shadow=True)
-            badge.add_widget(icon_image(icon, dp(28)))
+            bg_rect(badge, WHITE, radius=dp(17), shadow=True, gradient=accent,
+                    shadow_color=accent[1][:3])
+            badge.add_widget(icon_image(icon, dp(30)))
             self.add_widget(badge)
         texts = BoxLayout(orientation="vertical")
-        self.title_label = Label(text=title, bold=True, font_size=sp(23), color=INK,
+        self.title_label = Label(text=title, font_name=DISPLAY, font_size=sp(24), color=INK,
                                  halign="left", valign="bottom", shorten=True, markup=True)
         self.subtitle_label = Label(text=subtitle, font_size=sp(13), color=MUTED, halign="left",
                                     valign="top", size_hint_y=0.6, markup=True, shorten=True)
@@ -548,7 +638,7 @@ def light_popup(title, content, size_hint=(0.92, None), height=None, auto_dismis
     """A white popup with big rounded corners and a soft dark overlay behind it."""
     popup = Popup(title=title, content=content, size_hint=size_hint, auto_dismiss=auto_dismiss,
                   background=ROUND_BIG, border=BORDER_BIG, background_color=WHITE,
-                  title_color=INK, title_size=sp(19), separator_color=PRIMARY_SOFT,
+                  title_color=INK, title_size=sp(19), title_font=DISPLAY, separator_color=PRIMARY_SOFT,
                   separator_height=dp(2), overlay_color=(0.15, 0.15, 0.12, 0.35))
     if size_hint[1] is None:                             # caller chose a fixed height
         popup.height = height or dp(260)
@@ -679,17 +769,28 @@ class RecipeCard(TapCard):
 #     Fridge   -> a blue fridge           Recipes  -> an oak-wood kitchen counter
 #     Cookbook -> an open book            Calendar -> a paper wall calendar
 #     Profile  -> a warm "chef's corner"
+# Version 4.3 adds depth: gradient frames, a coloured glow underneath, a glossy rim, and a light
+# shining down from the top inside (the fridge light / the lamp over the counter).
 SCENES = {
     #              frame colour (or texture)       inner surface (or texture)      caption colour
-    "fridge": dict(frame=(0.70, 0.84, 0.97, 1), surface=(0.29, 0.60, 0.92, 1), caption=(1, 1, 1, 0.85)),
+    "fridge": dict(frame=(0.70, 0.84, 0.97, 1), surface=(0.29, 0.60, 0.92, 1), caption=(1, 1, 1, 0.9),
+                   frame_gradient=((0.93, 0.97, 1.00, 1), (0.64, 0.80, 0.97, 1)),
+                   surface_gradient=((0.42, 0.73, 0.99, 1), (0.18, 0.47, 0.86, 1)),
+                   light=(1, 1, 1, 0.42), glow=(0.20, 0.45, 0.85)),
     "kitchen": dict(frame=(0.55, 0.37, 0.23, 1), surface=WHITE, surface_texture="oak.jpg",
-                    caption=(0.33, 0.20, 0.10, 1)),
+                    caption=(0.33, 0.20, 0.10, 1),
+                    frame_gradient=((0.66, 0.45, 0.28, 1), (0.42, 0.26, 0.15, 1)),
+                    light=(1, 0.94, 0.76, 0.55), glow=(0.45, 0.28, 0.12)),
     # (The book's frame is plain leather colour: Kivy leaves a 1-pixel sliver beside rounded shapes
     #  painted with a picture, which showed next to the book. The cover itself uses the texture.)
     "book": dict(frame=(0.45, 0.24, 0.18, 1), surface=(0.99, 0.97, 0.92, 1),
-                 caption=(0.47, 0.27, 0.19, 1)),
-    "calendar": dict(frame=(0.80, 0.88, 0.81, 1), surface=WHITE, caption=PRIMARY_DARK),
-    "profile": dict(frame=(0.97, 0.88, 0.82, 1), surface=(1, 0.984, 0.968, 1), caption=(0.70, 0.40, 0.28, 1)),
+                 caption=(0.47, 0.27, 0.19, 1),
+                 frame_gradient=((0.56, 0.31, 0.23, 1), (0.34, 0.17, 0.12, 1)), glow=(0.35, 0.16, 0.10)),
+    "calendar": dict(frame=(0.80, 0.88, 0.81, 1), surface=WHITE, caption=PRIMARY_DARK,
+                     frame_gradient=((0.86, 0.95, 0.88, 1), (0.62, 0.82, 0.68, 1)), glow=(0.20, 0.50, 0.30)),
+    "profile": dict(frame=(0.97, 0.88, 0.82, 1), surface=(1, 0.984, 0.968, 1), caption=(0.70, 0.40, 0.28, 1),
+                    frame_gradient=((1.00, 0.91, 0.85, 1), (0.97, 0.76, 0.68, 1)),
+                    surface_gradient=((1, 0.99, 0.98, 1), (1, 0.965, 0.94, 1)), glow=(0.80, 0.40, 0.30)),
 }
 SCENE_FRAME = dp(9)                  # thickness of the frame
 SCENE_RADIUS = dp(20)                # roundness of the inner surface (the frame adds its thickness)
@@ -701,13 +802,35 @@ class Scene(BoxLayout):
     def __init__(self, theme, **kwargs):
         kwargs.setdefault("padding", SCENE_FRAME)
         super().__init__(orientation="vertical", **kwargs)
-        self.theme = SCENES[theme]
-        bg_rect(self, self.theme["frame"], radius=SCENE_RADIUS + SCENE_FRAME, shadow=True,
-                texture=self.theme.get("frame_texture"))
+        self.theme = t = SCENES[theme]
+        bg_rect(self, WHITE if t.get("frame_gradient") else t["frame"], radius=SCENE_RADIUS + SCENE_FRAME,
+                shadow=True, gradient=t.get("frame_gradient"), texture=t.get("frame_texture"),
+                shadow_color=t.get("glow", (0.30, 0.22, 0.15)))
+        with self.canvas.before:                        # a thin glossy rim along the frame's edge
+            Color(1, 1, 1, 0.55)
+            self._rim = Line(width=dp(1))
         self.inner = BoxLayout(orientation="vertical", padding=(dp(12), dp(10)), spacing=dp(8))
-        bg_rect(self.inner, self.theme["surface"], radius=SCENE_RADIUS,
-                texture=self.theme.get("surface_texture"))
+        bg_rect(self.inner, WHITE if t.get("surface_gradient") else t["surface"], radius=SCENE_RADIUS,
+                gradient=t.get("surface_gradient"), texture=t.get("surface_texture"))
+        if t.get("light"):                              # light shining down from the top inside
+            with self.inner.canvas.before:
+                Color(1, 1, 1, 1)
+                # (Corners of 1 px, not 0: with a 0 corner Kivy stretches the gradient wrongly.)
+                self._light = RoundedRectangle(radius=[SCENE_RADIUS, SCENE_RADIUS, 1, 1],
+                                               texture=gradient_texture(t["light"], (*t["light"][:3], 0)))
+            self.inner.bind(pos=self._draw_light, size=self._draw_light)
+        self.bind(pos=self._draw_rim, size=self._draw_rim)
         self.add_widget(self.inner)
+
+    def _draw_rim(self, *_):
+        r = SCENE_RADIUS + SCENE_FRAME
+        self._rim.rounded_rectangle = (self.x + dp(1), self.y + dp(1), self.width - dp(2),
+                                       self.height - dp(2), r - dp(1))
+
+    def _draw_light(self, *_):
+        height = min(self.inner.height * 0.4, dp(260))  # the top 40 % glows, fading downwards
+        self._light.pos = (self.inner.x, self.inner.top - height)
+        self._light.size = (self.inner.width, height)
 
     def caption(self, text):
         """A small label in this scene's colour, e.g. 'SHELVES' or 'RECOMMENDED FOR LUNCH'."""
@@ -738,29 +861,51 @@ def thumb_status(match):
     return "Ready to cook", HEX_GREEN
 
 
-class RecipeThumb(TapCard):
-    """A recipe as a thumbnail: square picture, its name (2 lines) and one status line."""
+class Pill(Label):
+    """A small rounded badge with its own background (e.g. 'Use today' on a recipe photo)."""
+
+    def __init__(self, text, bg, fg, font_size=sp(10.5), **kwargs):
+        super().__init__(text=text, color=fg, font_size=font_size, bold=True, markup=True,
+                         size_hint=(None, None), height=dp(22), **kwargs)
+        bg_rect(self, bg, radius=dp(11))
+        self.bind(texture_size=lambda *_: setattr(self, "width", self.texture_size[0] + dp(14)))
+
+
+THUMB_RATIO = 1.22                   # thumbnails are a little taller than wide (portrait cards)
+STATUS_BADGE = {HEX_RED: (DANGER_SOFT, DANGER), HEX_AMBER: (AMBER_SOFT, (0.75, 0.48, 0.12, 1)),
+                HEX_GREEN: (PRIMARY_SOFT, PRIMARY_DARK), HEX_GREY: (NEUTRAL, INK)}
+
+
+class RecipeThumb(ButtonBehavior, FloatLayout):
+    """A recipe as a modern photo card: the picture fills the card, the name sits on a dark fade
+    at the bottom, and two floating badges show the status and the cooking time."""
 
     def __init__(self, match, on_open, width=None, **kwargs):
-        super().__init__(padding=dp(6), spacing=dp(4), radius=dp(18), **kwargs)
+        super().__init__(size_hint_y=None, **kwargs)
         if width:                                        # fixed width inside a sideways strip
             self.size_hint_x = None
             self.width = width
+        self.height = (width or dp(150)) * THUMB_RATIO
+        self.bind(width=lambda *_: setattr(self, "height", self.width * THUMB_RATIO))
+        bg_rect(self, (0, 0, 0, 0), radius=dp(20), shadow=True)   # only the soft shadow
         recipe = match.recipe
-        picture = RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(14),
-                             size_hint_y=None, height=(width or dp(152)) - dp(12))
-        self.bind(width=lambda *_: setattr(picture, "height", self.width - dp(12)))   # always square
-        self.add_widget(picture)
-        name = Label(text=f"[b]{escape(recipe.name)}[/b]", markup=True, color=INK, font_size=sp(13.5),
-                     size_hint_y=None, height=dp(36), halign="left", valign="top",
-                     max_lines=2, shorten=True, shorten_from="right", padding=(dp(4), 0))
-        name.bind(size=lambda l, s: setattr(l, "text_size", s))   # wrap inside the card
+        self.add_widget(RoundImage(resolve_image(recipe.image_path, small=True), radius=dp(20),
+                                   pos_hint={"x": 0, "y": 0}))
+        shade = Widget(size_hint=(1, 0.55), pos_hint={"x": 0, "y": 0})   # dark fade behind the name
+        with shade.canvas:
+            Color(1, 1, 1, 1)
+            fade = RoundedRectangle(radius=[1, 1, dp(20), dp(20)],      # 1, not 0 (see Scene)
+                                    texture=gradient_texture((0.05, 0.05, 0.05, 0), (0.05, 0.05, 0.05, 0.72)))
+        shade.bind(pos=lambda w, p: setattr(fade, "pos", p), size=lambda w, sz: setattr(fade, "size", sz))
+        self.add_widget(shade)
+        name = Label(text=recipe.name, bold=True, color=WHITE, font_size=sp(14),   # plain text, no markup
+                     size_hint=(1, 0.36), pos_hint={"x": 0, "y": 0.02}, halign="left", valign="bottom",
+                     max_lines=2, shorten=True, shorten_from="right", padding=(dp(11), dp(8)))
+        name.bind(size=lambda l, sz: setattr(l, "text_size", sz))   # wrap inside the card
         self.add_widget(name)
         text, hex_color = thumb_status(match)
-        info = Label(text=f"[color={hex_color}][b]{escape(text)}[/b][/color]  [color={HEX_GREY}]"
-                          f"{recipe.prep_minutes} min[/color]", markup=True, font_size=sp(11.5),
-                     size_hint_y=None, height=dp(18), halign="left", valign="middle",
-                     shorten=True, padding=(dp(4), 0))
-        info.bind(size=lambda l, s: setattr(l, "text_size", s))
-        self.add_widget(info)
+        bg, fg = STATUS_BADGE[hex_color]
+        self.add_widget(Pill(escape(text), bg, fg, pos_hint={"x": 0.06, "top": 0.95}))
+        self.add_widget(Pill(f"{recipe.prep_minutes} min", (0.08, 0.08, 0.08, 0.5), WHITE,
+                             pos_hint={"right": 0.94, "top": 0.95}))
         self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists

@@ -342,11 +342,29 @@ def make_leather_texture(out_path, size=(512, 768)):
     leather.save(out_path, "JPEG", quality=88)
 
 
+def make_app_background(out_path, size=(540, 1170)):
+    """The soft, colourful app background: big blurred colour blobs on warm cream (a 'mesh gradient')."""
+    w, h = size
+    img = Image.new("RGB", size, (250, 245, 238))
+    blobs = Image.new("RGB", size, (250, 245, 238))
+    d = ImageDraw.Draw(blobs)
+    for (cx, cy, r, color) in ((0.10, 0.08, 0.45, (255, 214, 190)),    # peach, top left
+                               (0.95, 0.22, 0.40, (205, 236, 214)),    # mint, top right
+                               (0.15, 0.60, 0.42, (255, 238, 196)),    # butter, middle left
+                               (0.90, 0.85, 0.48, (222, 214, 250)),    # lavender, bottom right
+                               (0.30, 1.00, 0.35, (255, 220, 214))):   # rose, bottom
+        x, y, rr = cx * w, cy * h, r * w
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=color)
+    img = Image.blend(img, blobs.filter(ImageFilter.GaussianBlur(w * 0.16)), 0.85)   # very soft edges
+    img.save(out_path, "JPEG", quality=90)
+
+
 def make_textures():
     ui_dir = os.path.join(os.path.dirname(ICONS_DIR), "ui")
     make_oak_texture(os.path.join(ui_dir, "oak.jpg"))
     make_leather_texture(os.path.join(ui_dir, "leather.jpg"))
-    print("textures -> assets/ui/oak.jpg, leather.jpg")
+    make_app_background(os.path.join(ui_dir, "app_bg.jpg"))
+    print("textures -> assets/ui/oak.jpg, leather.jpg, app_bg.jpg")
 
 
 if __name__ == "__main__":

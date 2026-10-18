@@ -31,6 +31,7 @@ from urllib.parse import urlparse                  # read the port number out of
 from kivy.app import App                           # base class of every Kivy application
 from kivy.clock import Clock                       # timers (run something later / repeatedly)
 from kivy.core.window import Window                # the app window (colour, keyboard events)
+from kivy.graphics import Rectangle                # the background picture
 from kivy.metrics import dp, sp
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -49,7 +50,10 @@ from app.ui.pantry_screen import PantryScreen
 from app.ui.profile_screen import ProfileScreen
 from app.ui.recipe_detail_screen import RecipeDetailScreen
 from app.ui.recipes_screen import RecipesScreen
-from app.ui.widgets import BG, MUTED, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, WHITE, bg_rect, icon_image, set_bg
+from app.ui.widgets import (BG, GRAD_PRIMARY, WHITE, bg_rect, icon_image, set_bg,
+                            ui_texture)
+
+NAV_BAR = (0.09, 0.15, 0.13, 0.97)                # deep green-black floating tab bar (version 4.3)
 
 # The tabs of the bottom bar: (screen name, label, icon file in assets/icons).
 TABS = [("pantry", "Fridge", "tab_fridge"), ("recipes", "Recipes", "tab_recipes"),
@@ -63,24 +67,26 @@ class NavTab(ButtonBehavior, BoxLayout):
 
     def __init__(self, label, icon_name, on_tap, **kwargs):
         super().__init__(orientation="vertical", padding=(0, dp(6), 0, dp(4)), spacing=dp(2), **kwargs)
-        bg_rect(self, (0, 0, 0, 0), radius=dp(18))      # transparent until the tab is active
+        # The active tab is a glossy green gradient "bubble"; it is invisible (alpha 0) until active.
+        bg_rect(self, (1, 1, 1, 0), radius=dp(18), gradient=GRAD_PRIMARY)
         row = BoxLayout(size_hint_y=None, height=dp(26))
         self.icon = icon_image(icon_name, dp(26))
         row.add_widget(BoxLayout())                      # empty boxes on both sides = centred icon
         row.add_widget(self.icon)
         row.add_widget(BoxLayout())
         self.add_widget(row)
-        self.label = Label(text=label, font_size=sp(11), color=MUTED, size_hint_y=None, height=dp(16))
+        self.label = Label(text=label, font_size=sp(10.5), color=(1, 1, 1, 0.6), size_hint_y=None,
+                           height=dp(16))
         self.add_widget(self.label)
         # on_press (finger DOWN), not on_release: the tab reacts the moment you touch it (4.0.1)
         self.bind(on_press=lambda *_: on_tap())
 
     def set_active(self, active):
-        # Active tab = solid sage-green pill with white bold text (clearer than the old pale green).
-        set_bg(self, PRIMARY if active else (0, 0, 0, 0))
-        self.label.color = WHITE if active else MUTED
+        # Active tab = glossy green bubble with white bold text; the others are softly faded.
+        set_bg(self, WHITE if active else (1, 1, 1, 0))
+        self.label.color = WHITE if active else (1, 1, 1, 0.6)
         self.label.bold = active
-        self.icon.opacity = 1 if active else 0.6        # inactive icons look slightly faded
+        self.icon.opacity = 1 if active else 0.75
 
 
 class FridgeChefApp(App):
@@ -116,6 +122,10 @@ class FridgeChefApp(App):
         self.sm.add_widget(AddRecipeScreen(self, name="add_recipe"))
 
         root = BoxLayout(orientation="vertical")
+        with root.canvas.before:                   # a soft, colourful blend of colours behind everything
+            self._backdrop = Rectangle(texture=ui_texture("app_bg.jpg"))
+        root.bind(pos=lambda w, p: setattr(self._backdrop, "pos", p),
+                  size=lambda w, s: setattr(self._backdrop, "size", s))
         root.add_widget(self.sm)                   # the current page fills the space...
         root.add_widget(self._build_nav_bar())     # ...above the bottom tab bar
 
@@ -202,7 +212,7 @@ class FridgeChefApp(App):
     def _build_nav_bar(self):
         outer = BoxLayout(size_hint_y=None, height=dp(78), padding=(dp(12), dp(4), dp(12), dp(10)))
         bar = BoxLayout(spacing=dp(4), padding=dp(5))
-        bg_rect(bar, WHITE, radius=dp(24), shadow=True)  # a floating white rounded bar
+        bg_rect(bar, NAV_BAR, radius=dp(26), shadow=True, shadow_color=(0.05, 0.15, 0.10))   # floating dark bar
         self.nav_tabs = {}
         for name, label, icon_name in TABS:
             tab = NavTab(label, icon_name, on_tap=lambda n=name: self.tap_tab(n))

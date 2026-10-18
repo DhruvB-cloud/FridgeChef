@@ -187,14 +187,21 @@ class ShelfRow(GridLayout):
         for _ in range(cols - len(tiles)):               # empty places keep the columns the same width
             self.add_widget(Widget())
         with self.canvas.before:                         # the shelf is drawn behind the items
-            Color(*SHELF)
-            self._shelf = Rectangle()
+            Color(0.05, 0.20, 0.45, 0.25)                # its soft shadow on the fridge wall...
+            self._shelf_shadow = Rectangle()
+            Color(*SHELF)                                # ...the glass shelf...
+            self._shelf = RoundedRectangle(radius=[dp(2)])
+            Color(1, 1, 1, 1)                            # ...and its bright front edge
+            self._edge = Rectangle()
         self.bind(pos=self._draw, size=self._draw)
 
     def _draw(self, *_):
-        # A 4 dp thick line along the bottom, a bit wider than the row (like the sketch).
+        # A glass shelf along the bottom, a bit wider than the row (like the sketch).
         self._shelf.pos = (self.x - dp(4), self.y + dp(2))
-        self._shelf.size = (self.width + dp(8), dp(4))
+        self._shelf.size = (self.width + dp(8), dp(5))
+        self._edge.pos, self._edge.size = (self.x - dp(4), self.y + dp(2)), (self.width + dp(8), dp(1.5))
+        self._shelf_shadow.pos = (self.x - dp(4), self.y - dp(2))
+        self._shelf_shadow.size = (self.width + dp(8), dp(4))
 
 
 class DoorRack(BoxLayout):
