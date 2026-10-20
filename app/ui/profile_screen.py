@@ -5,10 +5,9 @@ WHY THIS FILE EXISTS:
     The "Profile" (user info) tab. It shows:
       * your name and avatar (tap the avatar to choose another one - version 4.7.1),
       * a Duolingo-style cooking STREAK (days in a row you cooked) with this week's 7 circles,
-      * the COOKING CALENDAR (version 5.0 - it used to be a tab of its own),
       * settings: how many people you usually cook for (default 1), which cooking machines you own.
-    Version 5.0 removed the stats row, the favourite dish and the title above the box to keep the
-    tab simple. The streak is calculated by app/stats.py from the cook_log table.
+    Version 5.0 removed the stats row, the favourite dish, the cooking calendar and the title above
+    the box to keep the tab simple. The streak is calculated by app/stats.py from the cook_log table.
 """
 
 from kivy.clock import Clock
@@ -25,7 +24,6 @@ from app import APP_VERSION
 from app.images import avatar_path
 from app.meal_time import current_meal
 from app.stats import current_streak, streak_message, week_strip
-from app.ui.calendar_screen import CalendarPanel     # 5.0: the calendar is part of the Profile tab
 from app.ui.welcome_popup import show_avatar_picker
 from app.validation import name_error                 # 4.7.1: the shared name rules
 from app.ui.widgets import (INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT,
@@ -89,8 +87,6 @@ class ProfileScreen(Screen):
         self.add_widget(root)
         # Save the name 0.6 s after the user stops typing (instead of on every key).
         self._save_name = Clock.create_trigger(lambda dt: self._store_name(), 0.6)
-        # 5.0: the cooking calendar lives on this tab now (it keeps the month you are looking at).
-        self.calendar = CalendarPanel(app)
 
     def on_pre_enter(self, *_):
         self.refresh()
@@ -157,11 +153,6 @@ class ProfileScreen(Screen):
             week.add_widget(col)
         sc.add_widget(week)
         c.add_widget(sc)
-
-        # ---------------------------------------------------------- cooking calendar (5.0)
-        c.add_widget(section_title("Cooking calendar"))
-        self.calendar.refresh()
-        c.add_widget(self.calendar)
 
         # ---------------------------------------------------------- settings
         c.add_widget(section_title("Settings"))

@@ -4,10 +4,11 @@ recipes_screen.py
 WHY THIS FILE EXISTS:
     The "Recipes" tab. Version 5.0 (testers wanted a simpler app) merged the old Recipes and
     Cookbook tabs into ONE list:
-      * four chips at the top, plus a search box:
-          Available   - dishes you can cook right now; "Recommended for <meal>" comes first
+      * three chips at the top, plus a search box:
+          Available   - dishes you can cook right now, sorted by meal time: "Recommended for
+                        <meal>" first, then dishes for the next meals of the day
           Unavailable - dishes that still miss an ingredient (fewest missing first)
-          Saved       - dishes you saved;   Mine - your own recipes
+          Saved       - dishes you saved AND your own recipes (+ New recipe)
       * every recipe is one row: its photo on the left, name, cooking time and cuisine on the
         right, and one coloured badge (Ready to cook / Missing 2 / Use today / Needs Oven);
       * no filter panel. Available / Unavailable only show dishes your cooking machines can make.
@@ -31,7 +32,7 @@ from app.dates import short_minutes
 from app.expiry import expiring_today
 from app.images import resolve_image
 from app.meal_time import current_meal
-from app.models import SORT_OPTIONS
+from app.models import MEAL_TYPES, SORT_OPTIONS
 from app.recipe_engine import filter_matches, match_all
 from app.ui.widgets import (AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, INK, MUTED, NEUTRAL,
                             PRIMARY_DARK, PRIMARY_SOFT, STATUS_BADGE, WHITE, Card, Chip, Header, Pill,
@@ -41,8 +42,7 @@ from app.ui.widgets import (AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, INK, MUTED,
 # The three views of the list: (key, label, colour of the chip when selected).
 VIEWS = [("available", "Available", (0.20, 0.64, 0.46, 1)),    # emerald
          ("unavailable", "Unavailable", (0.98, 0.55, 0.24, 1)),   # warm orange
-         ("saved", "Saved", (0.91, 0.36, 0.48, 1)),               # raspberry
-         ("mine", "Mine", (0.36, 0.45, 0.90, 1))]                 # indigo
+         ("saved", "Saved", (0.91, 0.36, 0.48, 1))]               # raspberry (saved + your own)
 ROW_HEIGHT = dp(104)
 # A colour per cuisine (hex text for Kivy markup) - small touches of colour that blend with the badges.
 CUISINE_COLORS = {"Indian": "e0782f", "Arabic": "b0862a", "English": "4a72c4", "Italian": "3f9b5d",
@@ -50,8 +50,18 @@ CUISINE_COLORS = {"Indian": "e0782f", "Arabic": "b0862a", "English": "4a72c4", "
 SAVED_PILL = ((1, 0.90, 0.93, 1), (0.85, 0.27, 0.42, 1))   # soft pink badge, raspberry text
 
 
+def meal_rank(recipe, meal):
+    """0 if the recipe is for `meal`, 1 if for the next meal of the day, ... (wrapping round).
+
+    E.g. at Lunch: a lunch dish -> 0, a snack -> 1, a dinner dish -> 2, breakfast -> 3.
+    """
+    start = MEAL_TYPES.index(meal) if meal in MEAL_TYPES else 0
+    ranks = [(MEAL_TYPES.index(m) - start) % len(MEAL_TYPES) for m in recipe.meal_types if m in MEAL_TYPES]
+    return min(ranks) if ranks else len(MEAL_TYPES)        # no meal type at all -> last
+
+
 class ViewChip(ToggleButtonBehavior, Label):
-    """One of the All / Saved / Mine chips: white when off, filled with its colour when on."""
+    """One of the Available / Unavailable / Saved chips: white when off, filled with its colour when on."""
 
     def __init__(self, key, text, color, **kwargs):
         super().__init__(text=text, bold=True, font_size=sp(14), size_hint=(None, None),
@@ -127,7 +137,7 @@ class RecipesScreen(Screen):
         self.search.bind(text=lambda *_: self.refresh_soon())
         body.add_widget(self.search)
 
-        # Four chips may not fit a small phone: they sit in a sideways-scrolling row.
+        # The chips may not all fit a small phone: they sit in a sideways-scrolling row.
         chip_scroll = ScrollView(do_scroll_y=False, size_hint_y=None, height=dp(40), bar_width=0)
         chips = BoxLayout(size_hint_x=None, spacing=dp(8))
         chips.bind(minimum_width=chips.setter("width"))
@@ -191,8 +201,7 @@ class RecipesScreen(Screen):
         views = {
             "available": [m for m in usable if not m.missing],   # every required ingredient is in the fridge
             "unavailable": [m for m in usable if m.missing],
-            "saved": [m for m in matches if m.recipe.is_saved],
-            "mine": [m for m in matches if m.recipe.is_user],
+            "saved": [m for m in matches if m.recipe.is_saved or m.recipe.is_user],   # + your own recipes
         }
         for key, chip in self.chips.items():
             chip.set_count(len(views[key]))
@@ -200,7 +209,13 @@ class RecipesScreen(Screen):
         sort = SORT_OPTIONS[1] if self.view == "unavailable" else SORT_OPTIONS[0]
         results = filter_matches(views[self.view], search=search, sort=sort)
         meal = current_meal()
-        recommended = [m for m in results if meal in m.recipe.meal_types] if self.view == "available" else []
+        if self.view == "available":
+            # Sorted by meal time: this meal's dishes first, then the next meals of the day. Python's
+            # sort is "stable", so dishes with the same rank keep their longest-first order.
+            results.sort(key=lambda m: meal_rank(m.recipe, meal))
+            recommended = [m for m in results if meal in m.recipe.meal_types]
+        else:
+            recommended = []
         rest = [m for m in results if m not in recommended]
         self.header.set_subtitle(f"{len(views['available'])} ready to cook")   # short: fits small phones
         self.state = dict(view=self.view, recommended=recommended, results=rest, search=search, meal=meal)
@@ -236,13 +251,17 @@ class RecipesScreen(Screen):
             return
         self._shown = shown
         self.list.clear_widgets()
-        if s["view"] == "mine":                            # your own recipes: "+ New recipe" on top
+        if s["view"] == "saved":                           # your own recipes live here: "+ New recipe" on top
             self.list.add_widget(SoftButton("+  New recipe", height=dp(52),
                                             on_release=lambda *_: self.app.open_add_recipe()))
-        if s["recommended"]:                               # Available: the dishes for this meal first
+        if s["view"] == "available" and (s["recommended"] or s["results"]):
+            # The Recommended section is always shown under Available (Dhruv), even when empty.
             self.list.add_widget(self._caption(f"Recommended for {s['meal']}"))
             for m in s["recommended"]:
                 self.list.add_widget(RecipeRow(m, on_open=self.app.open_recipe))
+            if not s["recommended"]:
+                self.list.add_widget(self._note(f"No {s['meal'].lower()} dish can be cooked with your fridge "
+                                                f"yet - here is what you can make for other meals."))
             if s["results"]:
                 self.list.add_widget(self._caption("More you can cook"))
         if not s["recommended"] and not s["results"]:
@@ -264,14 +283,18 @@ class RecipesScreen(Screen):
         if s["search"]:
             text = f"No recipe matches \"{s['search']}\"."
         elif s["view"] == "saved":
-            text = "Nothing saved yet. Open a recipe and tap [b]Save[/b] to keep it here."
-        elif s["view"] == "mine":
-            text = "You haven't added your own recipes yet. Tap [b]+ New recipe[/b]."
+            text = ("Nothing saved yet. Open a recipe and tap [b]Save[/b] to keep it here, "
+                    "or add your own with [b]+ New recipe[/b].")
         elif s["view"] == "available":
             text = ("Nothing can be cooked with what's in your fridge yet. Add a few items on the "
                     "[b]Fridge[/b] tab, or look at [b]Unavailable[/b] for dishes that miss just one thing.")
         else:
             text = "No recipes for your cooking machines. Tick more machines on the Profile tab."
+        return RecipesScreen._note(text)
+
+    @staticmethod
+    def _note(text):
+        """A soft card with a short message."""
         card = Card(shadow=False, padding=dp(14), radius=dp(18))
         card.add_widget(WrapLabel(text=text, color=MUTED, font_size=sp(14)))
         return card

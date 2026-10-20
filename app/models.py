@@ -103,7 +103,7 @@ class PantryItem:
     expiry: Optional[date] = None      # None means "does not expire" (e.g. salt)
     id: Optional[int] = None           # database primary key (None until saved)
     container: Optional[str] = None    # "bottle" / "jar" / "dish" (None = guess from name and unit)
-    tag: Optional[str] = None          # 5.0: Fresh produce / Meat / Bakery / Frozen / Grain / Pantry / Dry goods
+    tag: Optional[str] = None          # 5.0: Fresh produce / Dairy / Meat / ... (ingredient_catalog.TAGS)
 
     @property
     def is_water(self):

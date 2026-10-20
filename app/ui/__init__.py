@@ -7,6 +7,5 @@
 #   recipes_screen.py       - "Recipes" tab: one list with All / Saved / Mine and search (5.0)
 #   recipe_detail_screen.py - one recipe: nutrition, servings, cooking mode, share card, save
 #   add_recipe_screen.py    - form to create your own recipe with a photo
-#   calendar_screen.py      - the cooking calendar (a section of the Profile tab since 5.0)
 #   welcome_popup.py        - first-start popup (avatar, name, cooking machines)
-#   profile_screen.py       - "Profile" tab: avatar, streak, calendar, favourite dish, settings
+#   profile_screen.py       - "Profile" tab: avatar, name, streak, settings

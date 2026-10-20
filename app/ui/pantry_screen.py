@@ -4,14 +4,13 @@ pantry_screen.py
 WHY THIS FILE EXISTS:
     The "Fridge" tab - where the user keeps track of what they have.
 
-    Version 5.0 (testers wanted it simpler): a TO-DO LIST instead of the fridge drawing.
-        * Items are grouped in one coloured box per tag: Fresh produce, Meat, Bakery, Frozen,
-          Grain, Pantry, Dry goods (the tag comes from the ingredient catalogue).
-        * Each item is a row: a tick circle, its name, and "1 L  •  expires in 5 days".
-          Items expiring today are red; items past their date say "Expired".
-        * Tick the circle when it's used up (or thrown away): the item disappears, and an
-          "Undo" bar stays for a few seconds in case it was a mistake.
-        * Tap the row itself to change the amount (or remove it).
+    Version 5.0 (testers wanted it simpler): a LIST instead of the fridge drawing.
+        * Items are grouped in one coloured box per tag: Fresh produce, Dairy, Meat, Bakery,
+          Frozen, Grain, Spice, Pantry, Dry goods (the tag comes from the ingredient catalogue).
+        * Each item is a row: a dot in the tag's colour, its name, and "1 L  •  expires in 5 days".
+          Items expiring soon are amber, today red; items past their date say "expired".
+        * Tap a row to change the amount or remove it; after removing, an "Undo" bar stays for a
+          few seconds in case it was a mistake. (A tick-off circle was tried and removed again.)
     Water is always available, so it isn't listed.
 
     A banner lists items expiring today. The Add form fills in unit, amount, tag and expiry date
@@ -20,11 +19,9 @@ WHY THIS FILE EXISTS:
 
 from datetime import date, timedelta              # expiry dates
 
-from kivy.animation import Animation              # the tick-off fade
 from kivy.clock import Clock                      # hides the Undo bar after a few seconds
-from kivy.graphics import Color, Ellipse, Line    # the tick circle
+from kivy.graphics import Color, Ellipse          # the coloured dot of each row
 from kivy.metrics import dp, sp
-from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
@@ -45,9 +42,9 @@ from app.ui.widgets import (TAG_STYLES, Chip,
                             DANGER, DANGER_SOFT, HEX_AMBER, HEX_GREY, HEX_RED, INK, MUTED, NEUTRAL,
                             WHITE, Card, Header, SoftButton, TapBehavior,
                             SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, icon_image, labeled,
-                            light_popup, primary_action, scroll_list, show_message)
+                            light_popup, primary_action, scroll_list)
 
-UNDO_SECONDS = 5                                  # how long the "Undo" bar stays after ticking an item
+UNDO_SECONDS = 5                                  # how long the "Undo" bar stays after removing an item
 
 
 def expiry_text(item):
@@ -74,45 +71,20 @@ def short_expiry(item):
     return colored(f"expires in {left} days", HEX_GREY)
 
 
-class TickCircle(ButtonBehavior, Widget):
-    """The round to-do tick box on the left of a row. Tapping it draws a tick and calls on_tick."""
-
-    def __init__(self, color, on_tick, **kwargs):
-        super().__init__(size_hint=(None, None), size=(dp(30), dp(30)), **kwargs)
-        self.on_tick_cb = on_tick
-        with self.canvas:
-            self._fill = Color(*color[:3], 0)            # filled (in the tag's colour) once ticked
-            self._disc = Ellipse()
-            Color(*color)
-            self._ring = Line(width=dp(1.6))
-            self._tick_color = Color(1, 1, 1, 0)         # the white tick, invisible until ticked
-            self._tick = Line(width=dp(2.2), cap="round", joint="round")
-        self.bind(pos=self._draw, size=self._draw)
-        self.bind(on_release=lambda *_: self.tick())
-
-    def _draw(self, *_):
-        x, y, w, h = self.x, self.y, self.width, self.height
-        self._disc.pos, self._disc.size = (x + dp(2), y + dp(2)), (w - dp(4), h - dp(4))
-        self._ring.circle = (self.center_x, self.center_y, w / 2 - dp(2))
-        self._tick.points = [x + w * 0.30, y + h * 0.50, x + w * 0.45, y + h * 0.34, x + w * 0.72, y + h * 0.66]
-
-    def tick(self):
-        if self.disabled:
-            return
-        self.disabled = True                             # one tick per item
-        self._fill.a = 1
-        self._tick_color.a = 1
-        self.on_tick_cb()
-
-
 class ItemRow(TapBehavior, BoxLayout):
-    """One fridge item as a to-do row: tick circle | name + '1 L  •  expires in 5 days'."""
+    """One fridge item as a list row: coloured dot | name + '1 L  •  expires in 5 days'. Tap = edit."""
 
-    def __init__(self, item, color, on_open, on_tick, **kwargs):
-        super().__init__(size_hint_y=None, height=dp(56), spacing=dp(12), padding=(dp(4), dp(6)), **kwargs)
+    def __init__(self, item, color, on_open, **kwargs):
+        super().__init__(size_hint_y=None, height=dp(56), spacing=dp(12), padding=(dp(6), dp(6)), **kwargs)
         self.item = item
-        self.circle = TickCircle(color, on_tick=lambda: on_tick(self), pos_hint={"center_y": 0.5})
-        self.add_widget(self.circle)
+        dot = Widget(size_hint=(None, None), size=(dp(12), dp(12)), pos_hint={"center_y": 0.5})
+        with dot.canvas:                                 # a small dot in the tag's colour
+            Color(*color)
+            # Sized right away: the dot's size never changes, so a size binding alone would never run
+            # and the circle would keep Kivy's default 100 x 100 (the bug seen in testing).
+            disc = Ellipse(pos=dot.pos, size=dot.size)
+        dot.bind(pos=lambda w, p: setattr(disc, "pos", p))   # follow the dot when the row is laid out
+        self.add_widget(dot)
         texts = BoxLayout(orientation="vertical")
         name = Label(text=item.name, bold=True, color=INK, font_size=sp(16), halign="left", valign="bottom",
                      shorten=True, shorten_from="right")
@@ -124,19 +96,13 @@ class ItemRow(TapBehavior, BoxLayout):
         detail.bind(size=lambda l, sz: setattr(l, "text_size", sz))
         texts.add_widget(detail)
         self.add_widget(texts)
-        self.bind(on_tap=lambda *_: on_open(item))       # tap the row (not the circle) -> edit it
-
-    def on_touch_down(self, touch):
-        # A touch on the tick circle belongs to the circle only - it must not also open the edit popup.
-        if self.circle.collide_point(*touch.pos):
-            return self.circle.on_touch_down(touch)
-        return super().on_touch_down(touch)
+        self.bind(on_tap=lambda *_: on_open(item))       # tap the row -> change the amount / remove it
 
 
 class TagBox(Card):
     """One coloured box per tag: '[icon] Fresh produce  3' on top, the item rows below."""
 
-    def __init__(self, tag, items, on_open, on_tick, **kwargs):
+    def __init__(self, tag, items, on_open, **kwargs):
         bg, fg, icon_name = TAG_STYLES[tag]
         super().__init__(color=WHITE, padding=(dp(14), dp(12)), spacing=dp(2), radius=dp(22), **kwargs)
         head = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(10))
@@ -153,7 +119,7 @@ class TagBox(Card):
         head.add_widget(count)
         self.add_widget(head)
         for item in items:
-            self.add_widget(ItemRow(item, fg, on_open, on_tick))
+            self.add_widget(ItemRow(item, fg, on_open))
 
 
 class PantryScreen(Screen):
@@ -162,7 +128,7 @@ class PantryScreen(Screen):
     def __init__(self, app, **kwargs):
         super().__init__(**kwargs)
         self.app = app                                    # gives access to app.db and helpers
-        self._undo_item = None                            # the item ticked off last (for Undo)
+        self._undo_item = None                            # the item removed last (for Undo)
         self._hide_undo = Clock.create_trigger(lambda dt: self._show_undo(None), UNDO_SECONDS)
         root = BoxLayout(orientation="vertical")
         self.header = Header("My Fridge", icon="tab_fridge")
@@ -174,7 +140,7 @@ class PantryScreen(Screen):
         body.add_widget(self.banner)
         scroll, self.list_box = scroll_list(spacing=dp(12), padding=(dp(2), dp(2), dp(2), dp(12)))
         body.add_widget(scroll)
-        # The "Undo" bar (hidden until an item is ticked off).
+        # The "Undo" bar (hidden until an item is removed).
         self.undo_bar = BoxLayout(size_hint_y=None, height=0, opacity=0, padding=(dp(14), dp(6)), spacing=dp(8))
         bg_rect(self.undo_bar, (0.13, 0.16, 0.17, 0.94), radius=dp(16))
         self.undo_label = Label(text="", color=WHITE, font_size=sp(14), halign="left", valign="middle",
@@ -219,33 +185,21 @@ class PantryScreen(Screen):
         for tag in TAGS:                                  # one box per tag, in the catalogue's order
             tagged = [i for i in food if (i.tag or guess_info(i.name).tag) == tag]
             if tagged:
-                self.list_box.add_widget(TagBox(tag, tagged, self.open_item, self._ticked))
+                self.list_box.add_widget(TagBox(tag, tagged, self.open_item))
 
-    # ---------------------------------------------------------------- ticking off / undo
-    def _ticked(self, row):
-        """The circle was ticked: fade the row out, remove the item, offer Undo."""
-        item = row.item
-
-        def _remove(*_):
-            self.app.db.delete_pantry_item(item.id)
-            self._show_undo(item)
-            self.refresh()
-        anim = Animation(opacity=0, duration=0.35)        # a short fade, so the tick is seen
-        anim.bind(on_complete=_remove)
-        anim.start(row)
-
+    # ---------------------------------------------------------------- undo after removing
     def _show_undo(self, item):
         """Show the Undo bar for `item` (or hide it when item is None)."""
         self._undo_item = item
         if item is None:
             self.undo_bar.height, self.undo_bar.opacity = 0, 0
             return
-        self.undo_label.text = f"{item.name} ticked off"
+        self.undo_label.text = f"{item.name} removed"
         self.undo_bar.height, self.undo_bar.opacity = dp(48), 1
         self._hide_undo()                                 # (re)start the countdown
 
     def _undo(self):
-        """Put the ticked-off item back exactly as it was."""
+        """Put the removed item back exactly as it was."""
         item = self._undo_item
         if item is None:
             return
@@ -276,7 +230,7 @@ class PantryScreen(Screen):
         popup.open()
 
     def remove_item(self, item):
-        """Delete the item (with the same Undo bar as ticking it off)."""
+        """Delete the item and offer Undo for a few seconds."""
         self.app.db.delete_pantry_item(item.id)
         self._show_undo(item)
         self.refresh()

@@ -405,6 +405,27 @@ class Version50Test(unittest.TestCase):
             self.assertTrue(text.startswith("[color="), days)
         self.assertIn("use today", short_expiry(PantryItem("Milk", 1, "L", expiry=today)))
 
+    def test_available_recipes_are_ordered_by_meal_time(self):
+        # 5.0: at lunch, lunch dishes come first, then snacks, dinner, breakfast, brunch.
+        from app.models import Recipe
+        from app.ui.recipes_screen import meal_rank
+        def dish(*meals):
+            return Recipe(name="x", cuisine="Indian", is_veg=True, prep_minutes=5, servings=1, meal_types=list(meals))
+        self.assertEqual(meal_rank(dish("Lunch", "Dinner"), "Lunch"), 0)
+        self.assertEqual(meal_rank(dish("Snacks"), "Lunch"), 1)
+        self.assertEqual(meal_rank(dish("Dinner"), "Lunch"), 2)
+        self.assertEqual(meal_rank(dish("Breakfast"), "Lunch"), 3)        # tomorrow morning
+        self.assertEqual(meal_rank(dish("Breakfast"), "Dinner"), 1)       # after dinner comes breakfast
+        self.assertEqual(meal_rank(dish(), "Lunch"), 5)                   # no meal type -> last
+
+    def test_dairy_and_spice_tags(self):
+        from app.ingredient_catalog import info_for
+        self.assertEqual(info_for("Milk").tag, "Dairy")
+        self.assertEqual(info_for("Egg").tag, "Dairy")
+        self.assertEqual(info_for("Cumin").tag, "Spice")
+        self.assertEqual(info_for("Salt").tag, "Spice")
+        self.assertEqual(info_for("Sugar").tag, "Pantry")
+
     def test_unknown_names_get_sensible_defaults(self):
         from app.ingredient_catalog import guess_info
         self.assertEqual(guess_info("Turkey breast").tag, "Meat")           # meat words -> Meat
@@ -430,7 +451,7 @@ class Version50Test(unittest.TestCase):
             self.assertEqual((items["Paneer"].quantity, items["Paneer"].unit), (0.5, "kg"))
             self.assertEqual((items["Milk"].quantity, items["Milk"].unit), (1, "L"))
             self.assertEqual(items["Mint"].unit, "pcs")
-            self.assertEqual(items["Paneer"].tag, "Fresh produce")
+            self.assertEqual(items["Paneer"].tag, "Dairy")                     # 5.0: Dairy tag
             self.assertEqual(items["Water"].unit, "L")
             db.close()
             db = Database(path)                                             # a second start changes nothing

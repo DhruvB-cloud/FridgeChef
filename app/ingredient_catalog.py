@@ -6,7 +6,7 @@ WHY THIS FILE EXISTS:
 
     Version 5.0 (testers asked for less typing): every known ingredient also carries
       * its UNIT    - only kg, pcs or L (the three units the Fridge form offers),
-      * its TAG     - Fresh produce, Meat, Bakery, Frozen, Grain, Pantry or Dry goods,
+      * its TAG     - Fresh produce, Dairy, Meat, Bakery, Frozen, Grain, Spice, Pantry or Dry goods,
       * its SHELF LIFE in days - so the expiry date is filled in automatically,
       * a DEFAULT QUANTITY - what people usually buy (e.g. 1 L milk, 6 eggs).
     So adding "Milk" to the fridge is: type the name, check the amount, Save.
@@ -19,8 +19,8 @@ from collections import namedtuple
 
 # The three units the Fridge form offers, and the tags an item can carry.
 FRIDGE_UNITS = ["kg", "pcs", "L"]
-TAGS = ["Fresh produce", "Meat", "Bakery", "Frozen", "Grain", "Pantry", "Dry goods"]
-# Dairy and eggs have no tag of their own in the list Dhruv chose, so they count as fresh produce.
+TAGS = ["Fresh produce", "Dairy", "Meat", "Bakery", "Frozen", "Grain", "Spice", "Pantry", "Dry goods"]
+# (Dairy and Spice were added in 5.0 after the first phone test - Dhruv's choice.)
 
 # What we know about one ingredient (a namedtuple = a tiny read-only class with named fields).
 IngredientInfo = namedtuple("IngredientInfo", "unit tag shelf_days default_qty")
@@ -49,14 +49,14 @@ CATALOG = (
     # fruit
     + _group("Fresh produce", "pcs", 6, 6, "Apple, Banana, Orange, Mango, Pomegranate")
     + _group("Fresh produce", "kg", 5, 0.5, "Grapes, Strawberry, Pineapple")
-    # dairy & eggs
-    + _group("Fresh produce", "L", 5, 1, "Milk")
-    + _group("Fresh produce", "L", 7, 0.2, "Cream, Sour cream")
-    + _group("Fresh produce", "kg", 7, 0.5, "Yogurt, Curd, Labneh")
-    + _group("Fresh produce", "kg", 4, 0.2, "Paneer")
-    + _group("Fresh produce", "kg", 21, 0.2, "Cheese, Mozzarella, Parmesan")
-    + _group("Fresh produce", "kg", 30, 0.1, "Butter")
-    + _group("Fresh produce", "pcs", 21, 6, "Egg")
+    # ---------------------------------------------------------------- DAIRY (and eggs)
+    + _group("Dairy", "L", 5, 1, "Milk")
+    + _group("Dairy", "L", 7, 0.2, "Cream, Sour cream")
+    + _group("Dairy", "kg", 7, 0.5, "Yogurt, Curd, Labneh")
+    + _group("Dairy", "kg", 4, 0.2, "Paneer")
+    + _group("Dairy", "kg", 21, 0.2, "Cheese, Mozzarella, Parmesan")
+    + _group("Dairy", "kg", 30, 0.1, "Butter")
+    + _group("Dairy", "pcs", 21, 6, "Egg")
     # ---------------------------------------------------------------- MEAT
     + _group("Meat", "kg", 2, 0.5, "Chicken, Lamb, Minced meat, Fish, Prawns")
     + _group("Meat", "pcs", 4, 6, "Chicken sausage")
@@ -77,11 +77,13 @@ CATALOG = (
              "Honey, Tahini, Vegetable stock")
     + _group("Pantry", "kg", 180, 0.2, "Tomato puree, Pesto, Green curry paste, Salsa, Pickle, "
              "Ginger garlic paste")
-    + _group("Pantry", "kg", 365, 0.1, "Cumin, Turmeric, Garam masala, Red chili powder, Paprika, "
-             "Cinnamon, Cardamom, Mustard seeds, Za'atar, Sumac, Chili flakes, Oregano, Black pepper, "
-             "Yeast, Baking powder")
+    + _group("Pantry", "kg", 365, 0.1, "Yeast, Baking powder")
+    # ---------------------------------------------------------------- SPICE
+    + _group("Spice", "kg", 365, 0.1, "Cumin, Turmeric, Garam masala, Red chili powder, Paprika, "
+             "Cinnamon, Cardamom, Mustard seeds, Za'atar, Sumac, Chili flakes, Oregano, Black pepper")
+    + _group("Spice", "kg", 365, 1, "Salt")
     + _group("Pantry", "pcs", 365, 2, "Baked beans, Chopped tomatoes")
-    + _group("Pantry", "kg", 365, 1, "Salt, Sugar")
+    + _group("Pantry", "kg", 365, 1, "Sugar")
     # ---------------------------------------------------------------- DRY GOODS (pulses, nuts, dried fruit)
     + _group("Dry goods", "kg", 365, 0.5, "Lentils, Moong dal, Kidney beans, Chickpeas, Black beans, "
              "Fava beans, Peanuts, Cashews, Raisins, Dates, Tortilla chips")

@@ -31,7 +31,7 @@ from datetime import date, datetime           # for expiry dates and timestamps
 from app.models import APPLIANCES, UNLIMITED, WATER_NAME, Ingredient, PantryItem, Recipe   # our data shapes
 from app.seed_recipes import SEED_RECIPES                            # the starter recipe library
 from app.units import ZERO_BELOW                                      # below this = used up (4.7.1)
-from app.ingredient_catalog import guess_info                         # unit / tag / shelf life (5.0)
+from app.ingredient_catalog import guess_info, info_for               # unit / tag / shelf life (5.0)
 
 # SQL that creates every table if it does not exist yet. Running it on every start is safe.
 SCHEMA = """
@@ -140,9 +140,13 @@ class Database:
                                  ("bunch", "pcs", 1)):
             self.conn.execute("UPDATE pantry_items SET unit=?, quantity=round(quantity * ?, 3) WHERE unit=?",
                               (new, factor, old))
-        # ...and every item gets a tag: from the ingredient catalogue, or a sensible guess.
-        for row in self.conn.execute("SELECT id, name FROM pantry_items WHERE tag IS NULL").fetchall():
-            self.conn.execute("UPDATE pantry_items SET tag=? WHERE id=?", (guess_info(row["name"]).tag, row["id"]))
+        # ...and every item gets a tag: from the ingredient catalogue, or a sensible guess. Known
+        # ingredients always follow the catalogue, so tags added later (Dairy, Spice) reach old items too.
+        for row in self.conn.execute("SELECT id, name, tag FROM pantry_items").fetchall():
+            known = info_for(row["name"])
+            tag = known.tag if known else (row["tag"] or guess_info(row["name"]).tag)
+            if tag != row["tag"]:
+                self.conn.execute("UPDATE pantry_items SET tag=? WHERE id=?", (tag, row["id"]))
         # Old user recipes have no uid: give each a random one.
         for row in self.conn.execute("SELECT id FROM recipes WHERE uid IS NULL AND is_user=1").fetchall():
             self.conn.execute("UPDATE recipes SET uid=? WHERE id=?", (f"user-{uuid.uuid4().hex[:12]}", row["id"]))
