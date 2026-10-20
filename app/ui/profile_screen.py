@@ -5,11 +5,10 @@ WHY THIS FILE EXISTS:
     The "Profile" (user info) tab. It shows:
       * your name and avatar (tap the avatar to choose another one - version 4.7.1),
       * a Duolingo-style cooking STREAK (days in a row you cooked) with this week's 7 circles,
-      * your longest streak, total meals cooked and your FAVOURITE DISH (most cooked),
-      * settings: how many people you usually cook for (default 1), which cooking machines you own
-        (this replaced the old Kitchen tab). (The recipe-server setting was removed in 4.7.1 -
-        recipes now come from the published catalogue, see app/catalog.py.)
-    The numbers are calculated by app/stats.py from the cook_log table.
+      * the COOKING CALENDAR (version 5.0 - it used to be a tab of its own),
+      * settings: how many people you usually cook for (default 1), which cooking machines you own.
+    Version 5.0 removed the stats row, the favourite dish and the title above the box to keep the
+    tab simple. The streak is calculated by app/stats.py from the cook_log table.
 """
 
 from kivy.clock import Clock
@@ -23,15 +22,15 @@ from kivy.uix.stacklayout import StackLayout
 from kivy.uix.widget import Widget
 
 from app import APP_VERSION
-from app.images import avatar_path, resolve_image
+from app.images import avatar_path
 from app.meal_time import current_meal
-from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
+from app.stats import current_streak, streak_message, week_strip
 from app.ui.calendar_screen import CalendarPanel     # 5.0: the calendar is part of the Profile tab
 from app.ui.welcome_popup import show_avatar_picker
 from app.validation import name_error                 # 4.7.1: the shared name rules
-from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT,
-                            PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, Scene, SoftButton,
-                            SoftInput, SoftToggle, TapBehavior, TapCard, WrapLabel, escape, icon_image, labeled,
+from app.ui.widgets import (INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT,
+                            PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Scene, SoftButton,
+                            SoftInput, SoftToggle, TapBehavior, WrapLabel, escape, icon_image, labeled,
                             scroll_list, section_title, show_message, shrink_to_fit)
 
 
@@ -78,9 +77,10 @@ class ProfileScreen(Screen):
         super().__init__(**kwargs)
         self.app = app
         root = BoxLayout(orientation="vertical")
-        root.add_widget(Header("Profile", "Your cooking journey", icon="tab_profile"))
+        # 5.0: no title above the box any more (Dhruv: "remove the section on top, outside the box") -
+        # the coloured frame starts right at the top of the screen.
         # The "chef's corner" scene (same frame as every other tab); the cards scroll inside it.
-        body = BoxLayout(padding=(dp(16), dp(4), dp(16), dp(8)))
+        body = BoxLayout(padding=(dp(16), dp(16), dp(16), dp(8)))
         scene = Scene("profile")
         scroll, self.content = scroll_list(spacing=dp(14), padding=(dp(2), dp(4), dp(2), dp(12)))
         scene.inner.add_widget(scroll)
@@ -100,7 +100,6 @@ class ProfileScreen(Screen):
         c = self.content
         c.clear_widgets()
         days = db.cooked_days()
-        log = db.cook_log()
         streak, cooked_today = current_streak(days)
 
         # ---------------------------------------------------------- avatar + name
@@ -159,57 +158,10 @@ class ProfileScreen(Screen):
         sc.add_widget(week)
         c.add_widget(sc)
 
-        # ---------------------------------------------------------- stats row
-        stats = BoxLayout(size_hint_y=None, height=dp(114), spacing=dp(10))
-        for icon_name, value, caption, bg in (("trophy", longest_streak(days), "best streak", (1, 0.96, 0.86, 1)),
-                                              ("plate", len(log), "meals cooked", BLUE_SOFT),
-                                              ("tab_calendar", len(days), "cooking days", PRIMARY_SOFT)):
-            box = Card(color=bg, shadow=False, padding=dp(8), spacing=dp(2), radius=dp(18))
-            box.add_widget(centered(icon_image(icon_name, dp(30))))
-            box.add_widget(Label(text=f"[b]{value}[/b]", markup=True, color=INK, font_size=sp(20),
-                                 size_hint_y=None, height=dp(28)))
-            # 4.7.1: the caption wraps to two centred lines on narrow phones instead of overlapping.
-            label = Label(text=caption, color=MUTED, font_size=sp(12), size_hint_y=None, height=dp(30),
-                          halign="center", valign="top")
-            label.bind(width=lambda l, w: setattr(l, "text_size", (w, None)))
-            box.add_widget(label)
-            stats.add_widget(box)
-        c.add_widget(stats)
-
         # ---------------------------------------------------------- cooking calendar (5.0)
         c.add_widget(section_title("Cooking calendar"))
         self.calendar.refresh()
         c.add_widget(self.calendar)
-
-        # ---------------------------------------------------------- favourite dish
-        fav_name, fav_count = favourite_dish(log)
-        c.add_widget(section_title("Favourite dish"))
-        if fav_name:
-            entry = next(e for e in log if e["recipe_name"] == fav_name)   # newest entry of that dish
-            fav = TapCard(orientation="horizontal", spacing=dp(12), padding=dp(10))
-            holder = BoxLayout(size_hint=(None, None), size=(dp(76), dp(76)), pos_hint={"center_y": 0.5})
-            holder.add_widget(RoundImage(resolve_image(entry["image_path"], small=True), radius=dp(16)))
-            fav.add_widget(holder)
-            text = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
-            text.bind(minimum_height=text.setter("height"))
-            # 4.7.1: at most two lines, then "..." (long names used to break mid-word in a thin column).
-            text.add_widget(WrapLabel(text=f"[b]{escape(fav_name)}[/b]", font_size=sp(17),
-                                      max_lines=2, shorten=True, shorten_from="right"))
-            times = "once" if fav_count == 1 else f"{fav_count} times"
-            text.add_widget(WrapLabel(text=f"Cooked {times}", color=MUTED, font_size=sp(14)))
-            text.pos_hint = {"center_y": 0.5}
-            fav.add_widget(text)
-            star = icon_image("star", dp(30))
-            star.pos_hint = {"center_y": 0.5}               # fixed 30 dp: the name gets all the other space
-            fav.add_widget(star)
-            if entry["recipe_exists"]:
-                fav.bind(on_tap=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_tap = real taps only, not swipes
-            c.add_widget(fav)
-        else:
-            empty = Card(shadow=False)
-            empty.add_widget(WrapLabel(text="Cook a dish and tap 'Finished' - your favourite will show up here.",
-                                       color=MUTED, font_size=sp(14)))
-            c.add_widget(empty)
 
         # ---------------------------------------------------------- settings
         c.add_widget(section_title("Settings"))

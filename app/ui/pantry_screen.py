@@ -4,37 +4,29 @@ pantry_screen.py
 WHY THIS FILE EXISTS:
     The "Fridge" tab - where the user keeps track of what they have.
 
-    Version 4.1 draws it as a real fridge (from Dhruv's own sketch):
-        * jars stand on the white shelves at the top,
-        * dishes (leftovers) stand on their own shelf,
-        * bottles stand in the door rack at the bottom - Water is always there.
-    Every item is drawn as the container picked in the Add form (bottle / glass jar / dish), with
-    its name written on the container's label. Food that has gone past its expiry date turns
-    mouldy green.
+    Version 5.0 (testers wanted it simpler): a TO-DO LIST instead of the fridge drawing.
+        * Items are grouped in one coloured box per tag: Fresh produce, Meat, Bakery, Frozen,
+          Grain, Pantry, Dry goods (the tag comes from the ingredient catalogue).
+        * Each item is a row: a tick circle, its name, and "1 L  •  expires in 5 days".
+          Items expiring today are red; items past their date say "Expired".
+        * Tick the circle when it's used up (or thrown away): the item disappears, and an
+          "Undo" bar stays for a few seconds in case it was a mistake.
+        * Tap the row itself to change the amount (or remove it).
+    Water is always available, so it isn't listed.
 
-    Tapping an item opens a small popup:
-        * fresh food   -> change the quantity, or "Remove from fridge"
-        * expired food -> only "Throw Away"
-        * Water        -> it never runs out and never expires
-    Removing an item plays a short animation: it shrinks, floats up and fades out of the fridge.
-
-    A banner lists items expiring today. The item name box suggests ingredients while you type
-    ("oni" -> Onion). Expiry dates are picked from Day / Month / Year drop-downs (dd-mm-yyyy).
-    Easter egg: try adding "love".
+    A banner lists items expiring today. The Add form fills in unit, amount, tag and expiry date
+    from the catalogue ("Milk" -> 1 L, Fresh produce, 5 days). Easter egg: try adding "love".
 """
 
 from datetime import date, timedelta              # expiry dates
 
-from kivy.animation import Animation              # the "disappearing from the fridge" effect
-from kivy.core.text import Label as CoreLabel     # measures text without showing it (font fitting)
-from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Quad, RoundedRectangle,
-                           Scale, Translate)          # low-level drawing: shelves, door bin, handle
+from kivy.animation import Animation              # the tick-off fade
+from kivy.clock import Clock                      # hides the Undo bar after a few seconds
+from kivy.graphics import Color, Ellipse, Line    # the tick circle
 from kivy.metrics import dp, sp
-from kivy.properties import NumericProperty       # values Animation can change smoothly
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout      # lets the name sit ON the container picture
 from kivy.uix.gridlayout import GridLayout
-from kivy.uix.image import Image                  # the bottle / jar / dish pictures
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen         # one "page" of the app
 from kivy.uix.scrollview import ScrollView
@@ -42,83 +34,20 @@ from kivy.uix.widget import Widget
 
 from app.dates import format_date                 # shows dates as dd-mm-yyyy
 from app.expiry import expiring_soon, expiring_today
-from app.images import CONTAINER_ART, icon        # picture sizes + label positions, icon paths
-from app.ingredient_catalog import FRIDGE_UNITS, guess_info   # kg/pcs/L + unit, tag, shelf life (5.0)
-from app.models import CONTAINER_PLACE, PantryItem, guess_container
+from app.ingredient_catalog import FRIDGE_UNITS, TAGS, guess_info   # kg/pcs/L, the tags, the catalogue
+from app.models import PantryItem, guess_container
+from app.units import pretty_quantity
 from app.validation import name_error, parse_quantity   # 4.7.1: shared input rules
 from app.ui.autocomplete import AutoCompleteInput
 from app.ui.date_picker import DatePicker         # Day / Month / Year drop-downs
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
 from app.ui.widgets import (TAG_STYLES, Chip,
-                            DANGER, DANGER_SOFT, HEX_RED, INK, MUTED, NEUTRAL,
-                            WHITE, Card, Header, Scene, SoftButton, TapBehavior,
-                            gradient_texture,
-                            SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, labeled,
+                            DANGER, DANGER_SOFT, HEX_AMBER, HEX_GREY, HEX_RED, INK, MUTED, NEUTRAL,
+                            WHITE, Card, Header, SoftButton, TapBehavior,
+                            SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, icon_image, labeled,
                             light_popup, primary_action, scroll_list, show_message)
 
-
-# Food type -> (fill colour of the Name box, small coloured explanation under it).
-
-# The fridge's colours are the "fridge" scene in widgets.SCENES (shared look of all tabs).
-SHELF = (1, 1, 1, 0.95)                           # white glass shelves and the door rail
-
-# How tall each picture is drawn (the width follows from its shape). Drinks are a bit taller.
-ART_HEIGHT = {"bottle": dp(104), "carton": dp(100), "glass": dp(96)}
-DEFAULT_ART_HEIGHT = dp(88)
-STICKER = (1, 0.98, 0.93, 0.96)                   # the cream name sticker on each container
-SHELF_BASE = dp(12)                               # items stand this high above the bottom of a shelf row
-EMPTY_SHELF_HEIGHT = dp(30)                       # an empty shelf is just a low gap with a line
-
-
-def art_height(kind):
-    """The (biggest) height a container picture is drawn at."""
-    return ART_HEIGHT.get(kind, DEFAULT_ART_HEIGHT)
-
-
-def art_size(kind, max_width):
-    """(width, height) of a container picture: its normal height, made smaller only if it would be
-    wider than `max_width`. The picture's shape is always kept."""
-    w, h = CONTAINER_ART[kind]["size"]
-    height = art_height(kind)
-    width = height * w / h                          # same shape as the picture file
-    if width > max_width:                           # too wide for its place on the shelf:
-        width, height = max_width, max_width * h / w   # shrink both sides equally
-    return width, height
-
-
-def _text_size(text, font_size, wrap_width=None):
-    """(width, height) the text would need in bold at this font size, wrapped at `wrap_width`."""
-    label = CoreLabel(text=text, font_size=font_size, bold=True, halign="center",
-                      text_size=(wrap_width, None))
-    label.refresh()                                   # renders it off-screen
-    return label.texture.size
-
-
-def fit_font(text, width, height, largest=13, smallest=8):
-    """The biggest font size at which `text` fits in the box without cutting a word in two (or None)."""
-    for size in range(largest, smallest - 1, -1):     # try 13, 12, 11 ... 8
-        font = sp(size)
-        widest_word = max(_text_size(word, font)[0] for word in (text.split() or [text]))
-        if widest_word <= width and _text_size(text, font, width)[1] <= height:
-            return font
-    return None                                       # does not fit even at the smallest size
-
-
-def fit_label_text(text, width, height, smallest=8):
-    """(text, font) that fits the box: the full name if possible, else a shortened "Long nam..."
-
-    4.7.1: before, a name too long even at the smallest font spilled out of the jar's label.
-    """
-    font = fit_font(text, width, height, smallest=smallest)
-    if font is not None:                              # the whole name fits
-        return text, font
-    font = sp(smallest)
-    for end in range(len(text) - 1, 0, -1):           # drop one character at a time from the end
-        short = text[:end].rstrip() + "…"             # "…" = one ellipsis character
-        widest = max(_text_size(word, font)[0] for word in short.split())
-        if widest <= width and _text_size(short, font, width)[1] <= height:
-            return short, font
-    return "…", font                                  # a box too tiny for any letter
+UNDO_SECONDS = 5                                  # how long the "Undo" bar stays after ticking an item
 
 
 def expiry_text(item):
@@ -131,156 +60,100 @@ def expiry_text(item):
     return colored(text, HEX_RED) if left == 0 else text   # red on the last day
 
 
-class ContainerArt(FloatLayout):
-    """A bottle / jar / dish picture with the item's name written on its label."""
-
-    def __init__(self, kind, name, expired=False, **kwargs):
-        super().__init__(size_hint=(None, None), **kwargs)
-        self.kind = kind
-        self.full_name = name                         # kept whole; the label may show a shortened copy
-        w, h = CONTAINER_ART[kind]["size"]
-        left, top, right, bottom = CONTAINER_ART[kind]["label"]   # design units, y = 0 at the top
-        picture = f"container_{kind}_expired" if expired else f"container_{kind}"   # green = gone bad
-        self.add_widget(Image(source=icon(picture), fit_mode="fill",       # our size keeps its shape
-                              pos_hint={"x": 0, "y": 0}))   # FloatLayout only moves children with a pos_hint
-        # The name covers exactly the cream label of the picture. Kivy measures y from the
-        # BOTTOM, so the label's bottom edge is (h - bottom) / h of the way up.
-        # (No "shorten": in Kivy it squeezes text onto ONE line. fit_font() picks a size instead.)
-        self.name_label = Label(text=name, color=INK, bold=True, halign="center", valign="middle",
-                                max_lines=3,
-                                size_hint=((right - left) / w, (bottom - top) / h),
-                                pos_hint={"x": left / w, "y": (h - bottom) / h})
-        bg_rect(self.name_label, STICKER, radius=dp(7))   # the 3D pictures have no label: add a sticker
-        self.name_label.bind(size=self._fit_name)
-        self.add_widget(self.name_label)
-
-    def fit(self, max_width):
-        """Take the biggest size that fits `max_width` (see art_size)."""
-        self.size = art_size(self.kind, max_width)
-
-    def _fit_name(self, label, size):
-        """The label changed size: wrap the name inside it with the biggest font that fits."""
-        width, height = max(size[0] - dp(6), 1), max(size[1] - dp(2), 1)   # a little inner margin
-        label.text_size = (width, height)
-        label.text, label.font_size = fit_label_text(self.full_name, width, height)   # 4.7.1: "…" if too long
+def short_expiry(item):
+    """The coloured 'when' part of a row: 'expires in 5 days', 'use today', 'expired 2 days ago'."""
+    left = item.days_left()
+    if left is None:
+        return colored("no expiry date", HEX_GREY)
+    if left < 0:
+        return colored(f"expired {-left} day{'s' if left < -1 else ''} ago", HEX_RED, bold=True)
+    if left == 0:
+        return colored("use today", HEX_RED, bold=True)   # colored() escapes text, so bold is its own option
+    if left <= 2:
+        return colored(f"expires {'tomorrow' if left == 1 else 'in 2 days'}", HEX_AMBER)
+    return colored(f"expires in {left} days", HEX_GREY)
 
 
-class ItemTile(TapBehavior, Widget):
-    """One item standing on a shelf. `shrink` and `lift` drive the remove animation."""
+class TickCircle(ButtonBehavior, Widget):
+    """The round to-do tick box on the left of a row. Tapping it draws a tick and calls on_tick."""
 
-    shrink = NumericProperty(1)                       # 1 = normal size, 0 = gone
-    lift = NumericProperty(0)                         # how far it has floated up
+    def __init__(self, color, on_tick, **kwargs):
+        super().__init__(size_hint=(None, None), size=(dp(30), dp(30)), **kwargs)
+        self.on_tick_cb = on_tick
+        with self.canvas:
+            self._fill = Color(*color[:3], 0)            # filled (in the tag's colour) once ticked
+            self._disc = Ellipse()
+            Color(*color)
+            self._ring = Line(width=dp(1.6))
+            self._tick_color = Color(1, 1, 1, 0)         # the white tick, invisible until ticked
+            self._tick = Line(width=dp(2.2), cap="round", joint="round")
+        self.bind(pos=self._draw, size=self._draw)
+        self.bind(on_release=lambda *_: self.tick())
 
-    def __init__(self, item, on_open, **kwargs):
-        super().__init__(**kwargs)
+    def _draw(self, *_):
+        x, y, w, h = self.x, self.y, self.width, self.height
+        self._disc.pos, self._disc.size = (x + dp(2), y + dp(2)), (w - dp(4), h - dp(4))
+        self._ring.circle = (self.center_x, self.center_y, w / 2 - dp(2))
+        self._tick.points = [x + w * 0.30, y + h * 0.50, x + w * 0.45, y + h * 0.34, x + w * 0.72, y + h * 0.66]
+
+    def tick(self):
+        if self.disabled:
+            return
+        self.disabled = True                             # one tick per item
+        self._fill.a = 1
+        self._tick_color.a = 1
+        self.on_tick_cb()
+
+
+class ItemRow(TapBehavior, BoxLayout):
+    """One fridge item as a to-do row: tick circle | name + '1 L  •  expires in 5 days'."""
+
+    def __init__(self, item, color, on_open, on_tick, **kwargs):
+        super().__init__(size_hint_y=None, height=dp(56), spacing=dp(12), padding=(dp(4), dp(6)), **kwargs)
         self.item = item
-        # Move and scale everything this tile draws (the picture is a child, so it is included).
-        with self.canvas.before:
-            PushMatrix()                              # remember the normal drawing position...
-            self._move = Translate()
-            self._scale = Scale()
-        with self.canvas.after:
-            PopMatrix()                               # ...and go back to it after the tile
-        self.art = ContainerArt(item.kept_in(), item.name, expired=item.is_expired())
-        self.add_widget(self.art)
-        self.bind(pos=self._place, size=self._place, shrink=self._place, lift=self._place)
-        # on_tap (4.7.1): opens on a real tap only, so resting a thumb to scroll no longer opens it
-        self.bind(on_tap=lambda *_: on_open(item))
+        self.circle = TickCircle(color, on_tick=lambda: on_tick(self), pos_hint={"center_y": 0.5})
+        self.add_widget(self.circle)
+        texts = BoxLayout(orientation="vertical")
+        name = Label(text=item.name, bold=True, color=INK, font_size=sp(16), halign="left", valign="bottom",
+                     shorten=True, shorten_from="right")
+        name.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        texts.add_widget(name)
+        amount = pretty_quantity(item.quantity, item.unit)
+        detail = Label(text=f"{amount}  •  {short_expiry(item)}", markup=True, color=MUTED,
+                       font_size=sp(13), halign="left", valign="top", shorten=True, shorten_from="right")
+        detail.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        texts.add_widget(detail)
+        self.add_widget(texts)
+        self.bind(on_tap=lambda *_: on_open(item))       # tap the row (not the circle) -> edit it
 
-    def _place(self, *_):
-        """Stand the picture on the bottom of the tile, centred, as wide as fits."""
-        self.art.fit(self.width)
-        self.art.pos = (self.center_x - self.art.width / 2, self.y)
-        self._move.y = self.lift
-        self._scale.x = self._scale.y = self.shrink
-        self._scale.origin = self.art.center          # shrink towards the picture's middle
-
-    def vanish(self, on_done):
-        """The 'disappearing from the fridge' animation, then call on_done()."""
-        self.disabled = True                          # no second tap while it plays
-        # "in_back" first grows the item a tiny bit, then pulls it away - like a little pop.
-        anim = Animation(shrink=0.1, lift=dp(36), opacity=0, duration=0.55, t="in_back")
-        anim.bind(on_complete=lambda *_: on_done())
-        anim.start(self)
+    def on_touch_down(self, touch):
+        # A touch on the tick circle belongs to the circle only - it must not also open the edit popup.
+        if self.circle.collide_point(*touch.pos):
+            return self.circle.on_touch_down(touch)
+        return super().on_touch_down(touch)
 
 
-class ShelfRow(GridLayout):
-    """A row of up to `cols` items standing on a 3D glass shelf (version 4.4).
+class TagBox(Card):
+    """One coloured box per tag: '[icon] Fresh produce  3' on top, the item rows below."""
 
-    The shelf is drawn in layers: a soft shadow on the fridge wall below it, the see-through glass
-    top (narrower at the back = perspective), a bright frosted front edge, and two small support
-    pegs at the ends.
-    """
-
-    def __init__(self, tiles, cols, height, **kwargs):
-        super().__init__(cols=cols, spacing=dp(6), padding=(0, 0, 0, SHELF_BASE), size_hint_y=None,
-                         height=height + SHELF_BASE, **kwargs)
-        self.has_items = bool(tiles)                     # False = an empty shelf
-        for tile in tiles:
-            self.add_widget(tile)
-        for _ in range(cols - len(tiles)):               # empty places keep the columns the same width
-            self.add_widget(Widget())
-        with self.canvas.before:                         # the shelf is drawn behind the items
-            Color(1, 1, 1, 1)
-            self._shadow = RoundedRectangle(radius=[1], texture=gradient_texture(
-                (0.02, 0.14, 0.36, 0.30), (0.02, 0.14, 0.36, 0)))   # shadow fading down the wall
-            Color(0.86, 0.94, 1, 0.30)
-            self._glass = Quad()                          # the glass top, seen slightly from above
-            Color(0.80, 0.88, 0.98, 1)
-            self._pegs = [RoundedRectangle(radius=[dp(2)]) for _ in range(2)]
-            Color(1, 1, 1, 1)
-            self._front = RoundedRectangle(radius=[dp(2.5)], texture=gradient_texture(
-                (1, 1, 1, 1), (0.80, 0.90, 1, 0.95)))      # frosted front edge
-        self.bind(pos=self._draw, size=self._draw)
-
-    def _draw(self, *_):
-        x, y, w = self.x, self.y, self.width
-        self._shadow.pos, self._shadow.size = (x, y - dp(12)), (w, dp(14))
-        self._glass.points = [x - dp(2), y + dp(7), x + w + dp(2), y + dp(7),     # front edge...
-                              x + w - dp(12), y + dp(17), x + dp(12), y + dp(17)]   # ...back edge
-        self._front.pos, self._front.size = (x - dp(3), y + dp(3)), (w + dp(6), dp(5))
-        for peg, px in zip(self._pegs, (x - dp(3), x + w - dp(7))):
-            peg.pos, peg.size = (px, y - dp(1)), (dp(10), dp(5))
-
-
-class DoorRack(BoxLayout):
-    """The door shelf: items stand in a clear acrylic bin - you see them through its front panel."""
-
-    def __init__(self, rows, **kwargs):
-        super().__init__(orientation="vertical", spacing=dp(8), size_hint_y=None,
-                         padding=(dp(4), dp(4), dp(4), 0), **kwargs)
-        self.bind(minimum_height=self.setter("height"))  # as tall as its rows
-        for row in rows:
-            self.add_widget(row)
-        self._rows = rows
-        self._bins = []
-        with self.canvas.after:                          # drawn IN FRONT of the items, like real plastic
-            for _ in rows:
-                Color(1, 1, 1, 1)
-                panel = RoundedRectangle(radius=[dp(10)], texture=gradient_texture(
-                    (0.92, 0.97, 1, 0.42), (0.85, 0.93, 1, 0.20)))      # clear, slightly frosted panel
-                Color(1, 1, 1, 0.95)
-                rim = Line(width=dp(1.4))                 # its bright top edge
-                Color(1, 1, 1, 0.5)
-                gleam = Line(width=dp(1))                 # a small reflection
-                self._bins.append((panel, rim, gleam))
-        self.bind(pos=self._draw, size=self._draw)
-        for row in rows:                                 # rows are placed and sized AFTER the rack, so
-            row.bind(pos=self._draw, size=self._draw)    # redraw the bins when they move or resize too
-
-    def _draw(self, *_):
-        for (panel, rim, gleam), row in zip(self._bins, self._rows):
-            x, w = row.x - dp(6), row.width + dp(12)
-            height = min(dp(40), row.height - dp(2))     # the bin covers the lower part of the items
-            y = row.y + dp(2)
-            panel.pos, panel.size = (x, y), (w, height)
-            rim.rounded_rectangle = (x, y, w, height, dp(10))
-            gleam.points = [x + dp(14), y + height - dp(7), x + dp(60), y + height - dp(7)]
-
-
-def chunks(items, size):
-    """[1,2,3,4,5], 2 -> [[1,2], [3,4], [5]]: splits the items into shelf rows."""
-    return [items[i:i + size] for i in range(0, len(items), size)]
+    def __init__(self, tag, items, on_open, on_tick, **kwargs):
+        bg, fg, icon_name = TAG_STYLES[tag]
+        super().__init__(color=WHITE, padding=(dp(14), dp(12)), spacing=dp(2), radius=dp(22), **kwargs)
+        head = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(10))
+        badge = BoxLayout(size_hint=(None, None), size=(dp(32), dp(32)), padding=dp(5), pos_hint={"center_y": 0.5})
+        bg_rect(badge, bg, radius=dp(11))
+        badge.add_widget(icon_image(icon_name, dp(22)))
+        head.add_widget(badge)
+        title = Label(text=f"[b]{tag}[/b]", markup=True, color=fg, font_size=sp(16), halign="left",
+                      valign="middle")
+        title.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        head.add_widget(title)
+        count = Chip(str(len(items)), bg, fg)
+        count.pos_hint = {"center_y": 0.5}
+        head.add_widget(count)
+        self.add_widget(head)
+        for item in items:
+            self.add_widget(ItemRow(item, fg, on_open, on_tick))
 
 
 class PantryScreen(Screen):
@@ -289,7 +162,8 @@ class PantryScreen(Screen):
     def __init__(self, app, **kwargs):
         super().__init__(**kwargs)
         self.app = app                                    # gives access to app.db and helpers
-        self.tiles = {}                                   # item id -> its tile (for the animation)
+        self._undo_item = None                            # the item ticked off last (for Undo)
+        self._hide_undo = Clock.create_trigger(lambda dt: self._show_undo(None), UNDO_SECONDS)
         root = BoxLayout(orientation="vertical")
         self.header = Header("My Fridge", icon="tab_fridge")
         root.add_widget(self.header)
@@ -298,84 +172,92 @@ class PantryScreen(Screen):
         self.banner = BoxLayout(orientation="vertical", size_hint_y=None, height=0)   # height=0: empty = no gap
         self.banner.bind(minimum_height=self.banner.setter("height"))
         body.add_widget(self.banner)
-        # The fridge itself stays put and its shelves scroll INSIDE it, like looking into a real one.
-        self.scene = Scene("fridge")
-        with self.scene.canvas.after:                     # the door handle on the right of the frame
-            Color(1, 1, 1, 0.9)
-            self._handle = RoundedRectangle(radius=[dp(3)])
-        self.scene.bind(pos=self._draw_handle, size=self._draw_handle)
-        scroll, self.list_box = scroll_list(spacing=dp(6), padding=(0, 0, 0, dp(4)))
-        self.scene.inner.add_widget(scroll)
-        body.add_widget(self.scene)
-        # The big green button under the fridge (the same main button as on the other tabs).
+        scroll, self.list_box = scroll_list(spacing=dp(12), padding=(dp(2), dp(2), dp(2), dp(12)))
+        body.add_widget(scroll)
+        # The "Undo" bar (hidden until an item is ticked off).
+        self.undo_bar = BoxLayout(size_hint_y=None, height=0, opacity=0, padding=(dp(14), dp(6)), spacing=dp(8))
+        bg_rect(self.undo_bar, (0.13, 0.16, 0.17, 0.94), radius=dp(16))
+        self.undo_label = Label(text="", color=WHITE, font_size=sp(14), halign="left", valign="middle",
+                                shorten=True, shorten_from="right")
+        self.undo_label.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        self.undo_bar.add_widget(self.undo_label)
+        self.undo_bar.add_widget(SoftButton("Undo", size_hint=(None, None), size=(dp(80), dp(36)),
+                                            pos_hint={"center_y": 0.5}, on_release=lambda *_: self._undo()))
+        body.add_widget(self.undo_bar)
+        # The big green button at the bottom (the same main button as on the other tabs).
         body.add_widget(primary_action("+  Add Item", lambda: AddItemPopup(self.app, self.refresh).open()))
         root.add_widget(body)
         self.add_widget(root)
-
-    def _draw_handle(self, *_):
-        """A short white bar in the right edge of the frame, near the top - the fridge door handle."""
-        self._handle.pos = (self.scene.right - dp(7), self.scene.top - dp(118))
-        self._handle.size = (dp(5), dp(76))
 
     def on_pre_enter(self, *_):
         """Kivy calls this just before the screen is shown - always show fresh data."""
         self.refresh()
 
     def refresh(self):
-        items = self.app.db.list_pantry()                 # read everything from SQLite
-        food = [i for i in items if not i.is_water]       # Water is always there - don't count it
+        items = self.app.db.list_pantry()                 # read everything from SQLite, soonest expiry first
+        food = [i for i in items if not i.is_water]       # Water is always there - not listed
         today_items = expiring_today(items)
         soon = expiring_soon(items)
         self.header.set_subtitle(f"{len(food)} items • {len(today_items) + len(soon)} expiring soon")
         self.banner.clear_widgets()
         if today_items:                                   # soft red card at the top
-            card = Card(color=DANGER_SOFT, shadow=False)
+            card = Card(color=DANGER_SOFT, shadow=False, radius=dp(18))
             names = ", ".join(i.name for i in today_items)
             card.add_widget(WrapLabel(text=colored(f"Use today: {names}", HEX_RED, True)))
-            card.add_widget(WrapLabel(text="Dishes using these are shown first on the Recipes tab.",
+            card.add_widget(WrapLabel(text="Dishes using these are marked [b]Use today[/b] on the Recipes tab.",
                                       font_size=sp(13), color=MUTED))
             self.banner.add_widget(card)
 
-        self.list_box.clear_widgets()                     # rebuild the shelves from scratch
-        self.tiles = {}
-        self._fill_fridge(items, empty=not food)
+        self.list_box.clear_widgets()
+        if not food:                                      # nothing yet: say how to start
+            empty = Card(radius=dp(22), padding=dp(18))
+            empty.add_widget(WrapLabel(text="[b]Your fridge is empty.[/b]\nTap [b]+ Add Item[/b] and type what "
+                                            "you bought - the amount and expiry date fill themselves in.",
+                                       color=MUTED, font_size=sp(14)))
+            self.list_box.add_widget(empty)
+            return
+        for tag in TAGS:                                  # one box per tag, in the catalogue's order
+            tagged = [i for i in food if (i.tag or guess_info(i.name).tag) == tag]
+            if tagged:
+                self.list_box.add_widget(TagBox(tag, tagged, self.open_item, self._ticked))
 
-    # ---------------------------------------------------------------- drawing helpers
-    def _rows(self, items, cols, minimum=1):
-        """Shelf rows for `items`, `cols` per row; at least `minimum` rows (empty shelves too).
-        Each row is as tall as its tallest container (a can and a jar can share a shelf)."""
-        tiles = [ItemTile(i, self.open_item) for i in items]
-        self.tiles.update({t.item.id: t for t in tiles})  # remembered for the remove animation
-        groups = chunks(tiles, cols)
-        groups += [[] for _ in range(minimum - len(groups))]   # add empty shelves if needed
-        return [ShelfRow(g, cols, max(art_height(t.art.kind) for t in g) if g else EMPTY_SHELF_HEIGHT)
-                for g in groups]
+    # ---------------------------------------------------------------- ticking off / undo
+    def _ticked(self, row):
+        """The circle was ticked: fade the row out, remove the item, offer Undo."""
+        item = row.item
 
-    def _fill_fridge(self, items, empty):
-        """Jars on the shelves, dishes on the leftovers shelf, bottles in the door rack."""
-        inner = self.list_box                             # the scrolling inside of the fridge
-        caption = self.scene.caption                      # the shared caption style, in white
-        place = {p: [i for i in items if CONTAINER_PLACE[i.kept_in()] == p]   # shelves / leftovers / door
-                 for p in ("shelves", "leftovers", "door")}
-        if empty:                                         # only Water: say how to start
-            inner.add_widget(WrapLabel(text="Your fridge is empty. Tap [b]+ Add Item[/b] below.",
-                                       color=WHITE, halign="center", font_size=sp(14)))
-        inner.add_widget(caption("Shelves"))
-        for row in self._rows(place["shelves"], 3, minimum=2):
-            inner.add_widget(row)
-        inner.add_widget(caption("Leftovers"))
-        for row in self._rows(place["leftovers"], 3):
-            inner.add_widget(row)
-        inner.add_widget(caption("Door rack"))
-        inner.add_widget(DoorRack(self._rows(place["door"], 3)))
+        def _remove(*_):
+            self.app.db.delete_pantry_item(item.id)
+            self._show_undo(item)
+            self.refresh()
+        anim = Animation(opacity=0, duration=0.35)        # a short fade, so the tick is seen
+        anim.bind(on_complete=_remove)
+        anim.start(row)
+
+    def _show_undo(self, item):
+        """Show the Undo bar for `item` (or hide it when item is None)."""
+        self._undo_item = item
+        if item is None:
+            self.undo_bar.height, self.undo_bar.opacity = 0, 0
+            return
+        self.undo_label.text = f"{item.name} ticked off"
+        self.undo_bar.height, self.undo_bar.opacity = dp(48), 1
+        self._hide_undo()                                 # (re)start the countdown
+
+    def _undo(self):
+        """Put the ticked-off item back exactly as it was."""
+        item = self._undo_item
+        if item is None:
+            return
+        item.id = None                                    # it is saved as a new row
+        self.app.db.add_pantry_item(item)
+        self._show_undo(None)
+        self.refresh()
 
     # ---------------------------------------------------------------- tapping an item
     def open_item(self, item):
-        """Water -> a short note, expired food -> Throw Away, anything else -> quantity / remove."""
-        if item.is_water:
-            show_message("Water", "Water is always in your fridge.\nIt never runs out and never expires.",
-                         height=dp(230))
-        elif item.is_expired():
+        """Expired food -> Throw Away, anything else -> change the amount / remove."""
+        if item.is_expired():
             self._throw_away_popup(item)
         else:
             EditItemPopup(self.app, item, on_saved=self.refresh, on_remove=self.remove_item).open()
@@ -394,15 +276,10 @@ class PantryScreen(Screen):
         popup.open()
 
     def remove_item(self, item):
-        """Play the 'disappearing' animation, then delete the item and redraw the fridge."""
-        def _delete():
-            self.app.db.delete_pantry_item(item.id)
-            self.refresh()
-        tile = self.tiles.get(item.id)
-        if tile is None:                                  # not on screen (shouldn't happen): just delete
-            _delete()
-        else:
-            tile.vanish(_delete)
+        """Delete the item (with the same Undo bar as ticking it off)."""
+        self.app.db.delete_pantry_item(item.id)
+        self._show_undo(item)
+        self.refresh()
 
 
 class EditItemPopup:

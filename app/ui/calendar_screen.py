@@ -30,7 +30,7 @@ from app.dates import format_date                # dd-mm-yyyy
 from app.images import resolve_image
 from app.ui.cooked_popup import attach_photo     # "Add photo" for a calendar entry
 from app.ui.widgets import (PEACH_SOFT, INK, MUTED, NEUTRAL, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, SURFACE, WHITE,
-                            Card, RoundImage, SoftButton, TapCard, WrapLabel, bg_rect, escape)
+                            Card, RoundImage, SoftButton, TapCard, WrapLabel, bg_rect, escape, icon_image)
 
 PAPER_CARD = WHITE                               # 5.0: white cards (the calendar now sits on the Profile tab)
 
@@ -184,11 +184,14 @@ class CalendarPanel(BoxLayout):
         row.add_widget(text)
         photo = entry["photo_path"] if entry["photo_path"] and os.path.exists(entry["photo_path"]) else None
         # "Add photo" / "Change photo" - attach your own picture of the dish to this calendar entry.
-        row.add_widget(SoftButton("Change photo" if photo else "Add photo", size_hint=(None, None),
-                                  size=(dp(104), dp(36)), pos_hint={"center_y": 0.5},
-                                  bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(13),
-                                  on_release=lambda *_: attach_photo(self.app, entry["id"],
-                                                                     on_done=lambda p: self.refresh())))
+        # 5.0: a small round camera button (the wide "Add photo" button squeezed the dish name).
+        camera = SoftButton("", size_hint=(None, None), size=(dp(44), dp(44)), pos_hint={"center_y": 0.5},
+                            bg=PEACH_SOFT, on_release=lambda *_: attach_photo(self.app, entry["id"],
+                                                                              on_done=lambda p: self.refresh()))
+        icon = icon_image("camera", dp(24))
+        camera.add_widget(icon)
+        camera.bind(center=lambda b, c, i=icon: setattr(i, "center", c))   # keep the camera icon centred
+        row.add_widget(camera)
         card.add_widget(row)
         if photo:                                        # your photo, big, under the dish name
             card.add_widget(RoundImage(photo, radius=dp(16), size_hint_y=None, height=dp(190)))

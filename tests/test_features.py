@@ -394,6 +394,17 @@ class Version50Test(unittest.TestCase):
                 self.assertIn(info.unit, FRIDGE_UNITS)
                 self.assertIn(info.tag, TAGS)
 
+    def test_fridge_expiry_text_has_no_visible_markup(self):
+        # 5.0 bug: "[b]use today[/b]" showed literally, because colored() escapes its text.
+        from app.models import PantryItem
+        from app.ui.pantry_screen import short_expiry
+        today = date.today()                                                  # short_expiry uses the real date
+        for days in (-3, -1, 0, 1, 2, 9):
+            text = short_expiry(PantryItem("Milk", 1, "L", expiry=today + timedelta(days=days)))
+            self.assertNotIn("&bl;", text, days)                              # an escaped "[" = visible tag
+            self.assertTrue(text.startswith("[color="), days)
+        self.assertIn("use today", short_expiry(PantryItem("Milk", 1, "L", expiry=today)))
+
     def test_unknown_names_get_sensible_defaults(self):
         from app.ingredient_catalog import guess_info
         self.assertEqual(guess_info("Turkey breast").tag, "Meat")           # meat words -> Meat
