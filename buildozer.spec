@@ -22,7 +22,7 @@ source.include_exts = py,png,jpg,jpeg,ttf,json,txt
 # assets/catalog_photos = photos of the 80 newer recipes (5.0): phones download them from GitHub Pages.
 source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs,local_data,site,assets/catalog_photos
 # App version shown in Android settings.
-version = 4.7.1
+version = 5.0.0
 # Python packages bundled into the APK:
 #   pyjnius  - lets Python call Android Java APIs (share sheet, gallery)
 #   sqlite3  - the local database (on Android it is only built when listed here)
