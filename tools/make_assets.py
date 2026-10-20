@@ -163,6 +163,26 @@ def blank_calendar(icon):
     return icon
 
 
+# Version 5.0: one icon per fridge tag (file assets/icons/tag_<name>.png, used by widgets.TAG_STYLES).
+TAG_EMOJI = {
+    "tag_produce": "🥦",     # broccoli      - Fresh produce
+    "tag_dairy": "🥛",       # glass of milk - Dairy
+    "tag_meat": "🍗",        # poultry leg   - Meat
+    "tag_bakery": "🍞",      # bread         - Bakery
+    "tag_frozen": "🧊",      # ice cube      - Frozen
+    "tag_grain": "🌾",       # ear of rice   - Grain
+    "tag_spice": "🌶",       # hot pepper    - Spice
+    "tag_pantry": "🫙",      # jar           - Pantry
+    "tag_dry_goods": "🥜",   # peanuts       - Dry goods
+}
+
+
+def make_tag_icons():
+    """Save the 9 tag icons (Noto 2D, 128 x 128) into assets/icons."""
+    for name, char in TAG_EMOJI.items():
+        make_icon(name, char, os.path.join(ICONS_DIR, f"{name}.png"))
+
+
 # Version 4.7.1: the avatars a new user picks from (the names must match app.images.AVATARS).
 AVATAR_EMOJI = {
     "chef": "\U0001F9D1‍\U0001F373",   # cook
@@ -372,6 +392,9 @@ def make_textures():
 if __name__ == "__main__":
     if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only the fridge container pictures
         make_container_icons()
+        sys.exit()
+    if sys.argv[1:] == ["tags"]:                  # "make_assets.py tags" = only the 9 fridge tag icons
+        make_tag_icons()
         sys.exit()
     if sys.argv[1:] == ["avatars"]:               # "make_assets.py avatars" = only the profile avatars
         make_avatars()

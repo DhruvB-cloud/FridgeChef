@@ -1,4 +1,5 @@
-Fridge container pictures, tab icons, Profile icons and the app icon are made from
+Fridge container pictures, fridge tag icons (tag_*.png), tab icons, Profile icons, the avatars
+(assets/avatars) and the app icon are made from
 Google Noto Emoji images (https://github.com/googlefonts/noto-emoji).
 Noto Emoji image resources are licensed under the Apache License, Version 2.0 (text below).
 Copyright 2013 Google LLC. Changes: trimmed, resized, recoloured (expired versions), combined.
