@@ -34,6 +34,9 @@ icon.filename = %(source.dir)s/assets/app_icon.png
 presplash.filename = %(source.dir)s/assets/app_icon.png
 # Background colour around the start-up picture (the app's cream background).
 android.presplash_color = #F8F5EF
+# 5.0: an ANIMATION while the app loads (made by tools/make_splash.py): the icon breathes and three
+# coloured dots bounce. Lottie = a small JSON animation format; Android plays it until the app is ready.
+android.presplash_lottie = %(source.dir)s/assets/splash/splash_lottie.json
 # Lock the screen to portrait - the layout is designed for a phone held upright.
 orientation = portrait
 # Don't show the app full-screen (keep the Android status bar with the clock visible).

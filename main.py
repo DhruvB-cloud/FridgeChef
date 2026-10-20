@@ -30,6 +30,7 @@ else:
 
 import os                                          # paths for data folders
 
+from kivy.animation import Animation               # the fade-in when the app opens (5.0)
 from kivy.app import App                           # base class of every Kivy application
 from kivy.clock import Clock                       # timers (run something later / repeatedly)
 from kivy.core.window import Window                # the app window (colour, keyboard events)
@@ -135,10 +136,14 @@ class FridgeChefApp(App):
         # First-time users (nothing but the built-in Water) start on the Fridge tab, everyone else on Recipes.
         has_food = any(not item.is_water for item in self.db.list_pantry())
         self.navigate("recipes" if has_food else "pantry", from_tab=True)
+        root.opacity = 0                           # 5.0: start invisible, then fade in (see on_start)
+        self.root_widget = root
         return root                                # Kivy shows whatever build() returns
 
     def on_start(self):
         """Runs once the window is visible."""
+        # 5.0: after the loading animation, the app fades in instead of appearing all at once.
+        Animation(opacity=1, duration=0.45, t="out_quad").start(self.root_widget)
         if platform == "android":
             self._request_android_permissions()
         Clock.schedule_once(lambda dt: self._maybe_welcome(), 0.5)  # 4.7.1: first start -> Welcome popup
