@@ -1,0 +1,63 @@
+# .github/workflows/publish-catalog.yml
+# -------------------------------------
+# WHY THIS FILE EXISTS (version 4.7.1 - replaces the Cloud Run recipe server):
+#   Publishes the recipe catalogue as plain files on GitHub Pages:
+#     https://dhruvb-cloud.github.io/FridgeChef/catalog.json   (+ /images/...)
+#   The app downloads it once a day and does all the recipe matching on the phone.
+#   Plain files cost nothing per visit and there is no server to attack (QA report, point 15).
+#
+# ONE-TIME SETUP: GitHub -> this repository -> Settings -> Pages -> Source: "GitHub Actions".
+
+name: Publish recipe catalogue
+
+on:
+  push:
+    branches: [main]
+    paths:                                    # only when the recipes or their pictures change
+      - "app/seed_recipes.py"
+      - "app/api_schema.py"
+      - "assets/recipe_images/**"
+      - "tools/export_catalog.py"
+      - ".github/workflows/publish-catalog.yml"
+  workflow_dispatch:                          # by hand: Actions tab -> "Run workflow"
+
+permissions:                                  # what this workflow may do
+  contents: read                              # read the code
+  pages: write                                # publish to GitHub Pages
+  id-token: write                             # prove to Pages that this workflow is allowed to
+
+concurrency:                                  # never two publishes at the same time
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages                      # GitHub's standard environment for Pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Export the catalogue            # writes site/catalog.json + site/images
+        run: |
+          pip install pillow                  # app/images.py imports Pillow
+          python tools/export_catalog.py
+
+      - name: Prepare GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site folder
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Publish
+        id: deploy
+        uses: actions/deploy-pages@v4

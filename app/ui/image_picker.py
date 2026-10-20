@@ -13,7 +13,8 @@ WHY THIS FILE EXISTS:
     keeps its photo even if the original is deleted from the gallery - and it works offline.
 
 LIMITS (version 4.7.1):
-    * Photos larger than 5 MB are refused with a friendly message (Dhruv's rule).
+    * Photos up to 10 MB are accepted (larger ones are refused with a friendly message); the copy
+      we store is always compressed to UNDER 5 MB (in practice about 0.2-0.5 MB) - Dhruv's rule.
     * Big JPEGs are decoded at a reduced size ("draft" mode), so even a large photo needs only a
       few MB of memory instead of ~850 MB (measured in the QA report for a 64-megapixel photo).
 """
@@ -33,7 +34,8 @@ from app.ui.widgets import NEUTRAL, INK, FlatButton, bg_rect, light_popup
 
 IMAGE_EXTENSIONS = ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]   # what the desktop picker shows
 MAX_SIDE = 1280                                   # longest side after resizing (keeps files small)
-MAX_BYTES = 5 * 1024 * 1024                       # 5 MB: the biggest photo we accept (4.7.1)
+MAX_BYTES = 10 * 1024 * 1024                      # 10 MB: the biggest photo we accept (4.7.1)
+MAX_STORED_BYTES = 5 * 1024 * 1024                # the saved copy must be smaller than 5 MB
 MAX_PIXELS = 40_000_000                           # refuse absurd non-JPEG sizes (e.g. a 20000x20000 PNG)
 PICK_REQUEST = 4711                               # our id for the Android "pick a photo" request
 
@@ -117,7 +119,7 @@ def _pick_desktop(on_picked):
 
 
 def read_limited(source):
-    """Read the photo's bytes (a path or an open file), refusing anything over 5 MB."""
+    """Read the photo's bytes (a path or an open file), refusing anything over 10 MB."""
     if isinstance(source, str):                   # a path (PC)
         with open(source, "rb") as f:
             data = f.read(MAX_BYTES + 1)          # read one byte MORE than allowed...
@@ -125,7 +127,7 @@ def read_limited(source):
         with source:                              # 'with' closes it afterwards
             data = source.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:                     # ...so a too-big file is noticed without reading it all
-        raise PhotoError("This photo is larger than 5 MB. Please choose a smaller photo "
+        raise PhotoError("This photo is larger than 10 MB. Please choose a smaller photo "
                          "(or take one with a lower camera resolution).")
     return data
 
@@ -146,7 +148,12 @@ def import_image(source, images_dir):
             img = img.convert("RGB")                   # ...and drop transparency (JPEG can't store it)
             os.makedirs(images_dir, exist_ok=True)
             out_path = os.path.join(images_dir, f"{uuid.uuid4().hex}.jpg")   # random unique name
-            img.save(out_path, "JPEG", quality=85)     # 85 = good quality, small file
+            # Save with good quality (85); in the very unlikely case the file is still 5 MB or more,
+            # save again with lower quality until it is smaller.
+            for quality in (85, 70, 55, 40):
+                img.save(out_path, "JPEG", quality=quality)
+                if os.path.getsize(out_path) < MAX_STORED_BYTES:
+                    break
         return out_path
     except PhotoError:
         raise                                          # already has a friendly message

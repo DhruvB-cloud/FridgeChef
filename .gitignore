@@ -17,3 +17,5 @@ server/data/
 ~$*
 local_data/
 # ^ the app's database and photos when run on a PC (4.7.1 - kept on F:, never C:)
+site/
+# ^ the recipe catalogue folder made by tools/export_catalog.py (published by GitHub Actions)

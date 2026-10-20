@@ -2,7 +2,7 @@
 killswitch/main.py
 ------------------
 WHY THIS FILE EXISTS:
-    The ₹50 budget only sends emails - it does not stop spending. This small cloud function is the
+    The budget only sends emails - it does not stop spending. This small cloud function is the
     automatic "kill switch": Google Cloud Billing sends the budget's status to a Pub/Sub topic
     (a mailbox for programs) several times a day; this function reads every message and, if the
     money spent this month is MORE than the budget, it removes billing from the project.
@@ -14,8 +14,12 @@ SAFETY SWITCH:
     The environment variable SIMULATE=true makes the function only WRITE IN THE LOG what it would
     do. We test with SIMULATE=true first, then switch it to false.
 
+    (Version 4.7.1: the FridgeChef recipe server is retired, but this switch still protects the
+    other services in the same Google Cloud project, e.g. the HitCounter API.)
+
 TO TURN THINGS BACK ON after it fired (once you know why the cost went up):
-    gcloud billing projects link fridgechef-56971 --billing-account=0186B2-561432-FDA3ED
+    gcloud billing projects link <PROJECT_ID> --billing-account=<BILLING_ACCOUNT_ID>
+    (the real values are in the Google Cloud console - they are kept out of this public repository)
 """
 
 import base64                                     # Pub/Sub message bodies arrive base64-encoded
@@ -25,7 +29,7 @@ import os                                         # read settings from environme
 import functions_framework                         # Google's library that turns a function into a cloud function
 from google.cloud import billing_v1                # Google's library for the Cloud Billing API
 
-PROJECT_ID = os.environ.get("TARGET_PROJECT_ID", "fridgechef-56971")    # the project to protect
+PROJECT_ID = os.environ["TARGET_PROJECT_ID"]     # the project to protect - set when deploying (not stored here)
 PROJECT_NAME = f"projects/{PROJECT_ID}"                                  # the API's name for it
 SIMULATE = os.environ.get("SIMULATE", "true").lower() != "false"        # anything but "false" = only pretend
 

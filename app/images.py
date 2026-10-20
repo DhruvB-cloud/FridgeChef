@@ -5,8 +5,8 @@ WHY THIS FILE EXISTS:
     "Each recipe should have an image by default." Recipes get their picture from one of three places:
       1. Built-in recipes -> a bundled picture in assets/recipe_images/<uid>.jpg
          (stored in the database as "asset:<uid>.jpg", so it works on any device and any folder).
-      2. Recipes that came from the server but whose picture isn't bundled -> downloaded once
-         into a cache folder (see api_client.py) and then also available offline.
+      2. Catalogue recipes whose picture isn't bundled -> downloaded once into a cache folder
+         (see catalog.py) and then also available offline.
       3. User recipes -> their own photo, or, if they didn't add one, a soft-coloured picture
          generated here by make_default_image().
     resolve_image() turns whatever is stored into a real file path the UI can display.
@@ -33,7 +33,7 @@ def avatar_path(name):
     return path if path and os.path.exists(path) else None
 
 
-# Set by the app at start-up: where downloaded server images are kept.
+# Set by the app at start-up: where downloaded catalogue pictures are kept.
 _cache_dir = None
 
 # Soft pastel colour pairs (top colour, bottom colour) for generated pictures.
@@ -88,7 +88,7 @@ def resolve_image(image_path, small=False):
     """
     if not image_path:
         return None
-    if image_path.startswith("asset:"):                       # built-in / server picture
+    if image_path.startswith("asset:"):                       # built-in / catalogue picture
         name = image_path[len("asset:"):]
         if small and os.path.exists(os.path.join(THUMBS_DIR, name)):
             return os.path.join(THUMBS_DIR, name)               # the small copy

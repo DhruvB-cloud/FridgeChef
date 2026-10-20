@@ -17,7 +17,7 @@ on:                                           # WHEN should this workflow run?
   push:                                       # 1) when commits are pushed...
     branches: [main]                          #    ...to the main branch,
     paths:                                    #    but only if something the APP uses changed
-      - "main.py"                             #    (a change to server/ or docs/ alone does not
+      - "main.py"                             #    (a change to tools/ or docs/ alone does not
       - "app/**"                              #     need a new APK - "**" means "anything inside")
       - "assets/**"
       - "buildozer.spec"

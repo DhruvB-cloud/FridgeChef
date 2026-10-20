@@ -2,15 +2,14 @@
 recipes_screen.py
 -----------------
 WHY THIS FILE EXISTS:
-    The "Recipes" tab. Every time it opens (and whenever a filter changes) it sends an API request
-    to the FridgeChef server (see app/api_client.py and server/app.py) with:
-        what's in the fridge + which machines you own + your filters + "cooking for 1 person".
-    The server answers with the matching recipes and the "Recommended for <meal>" list.
+    The "Recipes" tab. Every time it opens (and whenever a filter changes) it matches every recipe
+    on the phone against: what's in the fridge + which machines you own + your filters +
+    "cooking for 1 person", and shows the matches plus a "Recommended for <meal>" list.
 
-    * ONLINE  -> results come from the server. Every recipe received is also saved in the local
-                 database (so it can be opened, cooked, saved - and used offline later).
-    * OFFLINE -> (no data / server off) the same matching runs on the phone using its local copy.
-    Your own recipes live only on the phone, so they are matched locally and merged into the list.
+    Version 4.7.1: there is no recipe server any more. Once a day app/catalog.py downloads the
+    published recipe catalogue (a plain file on GitHub Pages) and saves new / changed recipes in
+    the local database; the status chip shows "Up to date" after a successful check, else
+    "Offline" (the saved recipes keep working either way).
 
     Layout (version 4.2): the tab is the KITCHEN. Recipes are thumbnails lying on an oak-wood
     counter - "Recommended for <meal>" as a sideways strip, then all recipes as a grid
@@ -26,11 +25,11 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 
-from app.api_client import RecipeApiClient
+from app.catalog import apply_catalog, sync_if_due
 from app.expiry import expiring_today
 from app.meal_time import current_meal
 from app.models import CUISINES, NUTRITION_TAGS, SORT_OPTIONS
-from app.recipe_engine import filter_matches, match_all, recommend, sort_matches
+from app.recipe_engine import filter_matches, match_all, recommend
 from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
                             PRIMARY_SOFT, THUMB_RATIO, Card, Chip, Header, RecipeThumb, Scene, SoftInput,
                             SoftSpinner, SoftToggle, WrapLabel, colored, labeled, scroll_list)
@@ -48,8 +47,7 @@ class RecipesScreen(Screen):
     def __init__(self, app, **kwargs):
         super().__init__(**kwargs)
         self.app = app
-        self.request_id = 0              # increases with every request; stale answers are ignored
-        self.state = None                # last results: dict(meal, recommended, results, online)
+        self.state = None                # last results: dict(meal, recommended, results, servings)
         self.cols = None                 # thumbnails per grid row (None = not decided yet)
         # A "trigger" runs refresh() once, 0.35 s after the LAST call - so typing "paneer" sends
         # one request instead of six.
@@ -132,7 +130,7 @@ class RecipesScreen(Screen):
         self.refresh()                                   # opening the tab = a new API request
 
     def refresh(self):
-        """Send the API request (in the background). Falls back to offline matching on failure."""
+        """Match all saved recipes on the phone (instant) and, once a day, check for new recipes."""
         db = self.app.db
         count = self._active_filter_count()
         self.filters_btn.text = f"Filters ({count})" if count else "Filters"
@@ -142,64 +140,36 @@ class RecipesScreen(Screen):
                         only_cookable=self.cook_now.state == "down",
                         today=date.today(), now=datetime.now())
         self._show_banner(pantry)
-        self.request_id += 1
-        request_id = self.request_id
-        url = self.app.server_url()
-        if not url:                                      # user switched the server off in Profile
-            self._apply_offline(snapshot)
-            return
-        self._set_status("Loading", NEUTRAL, MUTED)
-        filters = dict(snapshot["filters"], only_cookable=snapshot["only_cookable"])
+        # Once a day: look for new recipes in the background (see app/catalog.py).
+        checking = sync_if_due(db, lambda update, ok: Clock.schedule_once(   # back to the UI thread
+            lambda dt: self._catalog_checked(update, ok)))
+        if checking:
+            self._set_status("Checking", NEUTRAL, MUTED)
+        elif self.status_chip.text == "...":             # today's check already succeeded earlier
+            self._set_status("Up to date", PRIMARY_SOFT, PRIMARY_DARK)
+        self._apply_local(snapshot)                      # results appear immediately
 
-        def done(result, error):                         # runs on the BACKGROUND thread...
-            # ...so hop back to the UI thread before touching any widget or the database.
-            Clock.schedule_once(lambda dt: self._on_answer(request_id, snapshot, result, error))
-        RecipeApiClient(url).fetch_async(done, pantry=pantry, appliances=snapshot["appliances"],
-                                         filters=filters, servings=snapshot["servings"],
-                                         today=snapshot["today"], now=snapshot["now"])
-
-    def _on_answer(self, request_id, snapshot, result, error):
-        if request_id != self.request_id:               # a newer request was sent meanwhile
+    def _catalog_checked(self, update, ok):
+        """The daily catalogue check finished (runs on the UI thread)."""
+        if not ok:
+            self._set_status("Offline", AMBER_SOFT, AMBER)   # the saved recipes still work
             return
-        if error is not None:
-            print(f"[FridgeChef] {error} - using offline recipes")
-            self._apply_offline(snapshot)
-            return
-        meal, recommended, results = result
-        db = self.app.db
-        saved = db.saved_flags()
-        own_photos = db.custom_images()                  # photos the user chose on this phone
-        # Save every server recipe locally (keeps the offline copy fresh) and use the LOCAL id.
-        for match in {id(m): m for m in recommended + results}.values():   # each object once
-            match.recipe.id = db.upsert_catalog_recipe(match.recipe, commit=False)
-            match.recipe.is_saved = saved.get(match.recipe.uid, False)
-            match.recipe.custom_image = own_photos.get(match.recipe.uid)
-        db.commit()
-        # The user's own recipes only exist on the phone: match them here and merge them in.
-        mine = match_all(db.list_user_recipes(), snapshot["pantry"], snapshot["appliances"],
-                         servings=snapshot["servings"])
-        f = snapshot["filters"]
-        mine_filtered = filter_matches(mine, only_cookable=snapshot["only_cookable"], **f)
-        results = sort_matches(results + mine_filtered, f["sort"])
-        results = [m for m in results if m.appliance_ok]   # 4.7.1: hide dishes needing a machine you lack
-        recommended = recommend(recommended + filter_matches(mine, **f), meal)
-        self.state = dict(meal=meal, recommended=recommended, results=results, online=True,
-                          servings=snapshot["servings"])
-        self._set_status("Live", PRIMARY_SOFT, PRIMARY_DARK)
-        self._render()
+        apply_catalog(self.app.db, update)               # save new / changed recipes (if any)
+        self._set_status("Up to date", PRIMARY_SOFT, PRIMARY_DARK)
+        if update and self.app.sm.current == "recipes":  # new recipes arrived -> show them
+            self.refresh()
 
-    def _apply_offline(self, snapshot):
-        """Do the same work as the server, but with the recipes stored on this phone."""
+    def _apply_local(self, snapshot):
+        """Match every saved recipe (catalogue + your own) on this phone."""
         db = self.app.db
         matches = match_all(db.list_recipes(), snapshot["pantry"], snapshot["appliances"],
                             servings=snapshot["servings"])
         f = snapshot["filters"]
         meal = current_meal(snapshot["now"])
-        self.state = dict(meal=meal, online=False, servings=snapshot["servings"],
+        self.state = dict(meal=meal, servings=snapshot["servings"],
                           recommended=recommend(filter_matches(matches, **f), meal),
                           results=[m for m in filter_matches(matches, only_cookable=snapshot["only_cookable"], **f)
                                    if m.appliance_ok])   # 4.7.1: only dishes your machines can cook
-        self._set_status("Offline", AMBER_SOFT, AMBER)
         self._render()
 
     def _set_status(self, text, bg, fg):
@@ -237,8 +207,7 @@ class RecipesScreen(Screen):
             return
         s = self.state
         people = "1 person" if s["servings"] == 1 else f"{s['servings']} people"
-        source = "live recipes" if s["online"] else "offline recipes"
-        self.header.set_subtitle(f"For {people} • {source}")
+        self.header.set_subtitle(f"For {people} • {len(s['results'])} recipes")
         # Version 4.0.1: rebuilding ~30 cards while you scroll interrupted the swipe and jumped back
         # to the top. If the new answer looks exactly like what is on screen, keep the screen as it is.
         shown = (self.cols, s["meal"], self._fingerprint(s["recommended"]), self._fingerprint(s["results"]))

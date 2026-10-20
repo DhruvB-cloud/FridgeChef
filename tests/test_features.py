@@ -5,11 +5,13 @@ WHY THIS FILE EXISTS:
     Automated checks for the second set of features:
       * streaks / favourite dish (app/stats.py)
       * ingredient suggestions (app/ingredient_catalog.py)
-      * the web API (server/app.py) - including a full round trip through the JSON format the
-        phone uses (app/api_schema.py). Skipped automatically if Flask isn't installed.
+      * the recipe catalogue (app/catalog.py) - including a round trip through the JSON format
+        (app/api_schema.py), versions, and unsafe picture names
+      * the 4.7.1 input rules, photo limits and display fixes
     Run from the FridgeChef folder:   python -m unittest discover tests -v
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -18,7 +20,7 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.api_schema import match_from_dict, pantry_to_dict, recipe_from_dict, recipe_to_dict
+from app.api_schema import recipe_from_dict, recipe_to_dict
 from app.ingredient_catalog import info_for, suggest
 from app.models import PantryItem
 from app.seed_recipes import SEED_RECIPES
@@ -299,13 +301,6 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(len(copy.ingredients), len(original.ingredients))
 
 
-try:
-    import flask  # noqa: F401
-    HAVE_FLASK = True
-except ImportError:
-    HAVE_FLASK = False
-
-
 class Version471Test(unittest.TestCase):
     """The input rules and display fixes from the 4.7.1 QA report."""
 
@@ -359,9 +354,10 @@ class Version471Test(unittest.TestCase):
             out = import_image(small, os.path.join(folder, "out"))
             with Image.open(out) as result:
                 self.assertEqual(result.size, (1280, 853))                     # shrunk, shape kept
+            self.assertLess(os.path.getsize(out), 5 * 1024 * 1024)            # stored copy under 5 MB
             big = os.path.join(folder, "big.jpg")
             with open(big, "wb") as f:
-                f.write(b"\xff" * (MAX_BYTES + 10))                              # just over 5 MB
+                f.write(b"\xff" * (MAX_BYTES + 10))                              # just over 10 MB
             with self.assertRaises(PhotoError):
                 import_image(big, folder)
             junk = os.path.join(folder, "junk.jpg")
@@ -371,74 +367,45 @@ class Version471Test(unittest.TestCase):
                 import_image(junk, folder)
 
 
-@unittest.skipUnless(HAVE_FLASK, "Flask not installed")
-class ApiTest(unittest.TestCase):
-    def setUp(self):
-        from server.app import create_app
-        self.folder = tempfile.TemporaryDirectory()
-        self.app = create_app(os.path.join(self.folder.name, "catalog.db"))
-        self.client = self.app.test_client()
+class CatalogTest(unittest.TestCase):
+    """4.7.1: the published recipe catalogue (replaces the retired Cloud Run server)."""
 
-    def tearDown(self):
-        self.app.extensions["fridgechef_db"].close()      # Windows can't delete an open file
-        self.folder.cleanup()
+    def test_export_round_trip_and_version(self):
+        from app.catalog import fingerprint
+        dicts = [recipe_to_dict(r) for r in SEED_RECIPES]
+        self.assertEqual(fingerprint(dicts), fingerprint(list(dicts)))     # same recipes -> same version
+        changed = [dict(dicts[0], name="Something else")] + dicts[1:]
+        self.assertNotEqual(fingerprint(dicts), fingerprint(changed))      # any change -> new version
+        back = [recipe_from_dict(d) for d in dicts]
+        self.assertEqual([r.uid for r in back], [r.uid for r in SEED_RECIPES])
 
-    def test_bad_requests_get_clear_400s_never_500s(self):
-        # 4.7.1: each of these used to crash the server (HTTP 500) or was wrongly accepted.
-        import json
-        item = {"name": "Potato", "quantity": 1, "unit": "kg"}
-        bodies = [{"filters": [1, 2]}, {"filters": {"max_minutes": "abc"}}, {"servings": -5},
-                  {"servings": 10 ** 18}, {"servings": "abc"}, {"appliances": "Stove"},
-                  {"pantry": [dict(item, quantity=-1)]}, {"pantry": ["potato"]},
-                  {"pantry": [dict(item, name="")]}, {"today": "yesterday"}]
-        for body in bodies:
-            response = self.client.post("/api/recipes/search", json=body)
-            self.assertEqual(response.status_code, 400, body)
-            self.assertNotIn("Traceback", response.get_json()["error"])
-        for raw in ('{"pantry": [{"name": "x", "quantity": NaN, "unit": "g"}]}',   # NaN is not a number
-                    '{"pantry":' + "[" * 5000 + "]" * 5000 + "}"):                 # absurd nesting
-            response = self.client.post("/api/recipes/search", data=raw, content_type="application/json")
-            self.assertEqual(response.status_code, 400)
-        huge = json.dumps({"pantry": [dict(item, name=f"Item {i}") for i in range(20000)]})   # > 256 KB
-        response = self.client.post("/api/recipes/search", data=huge, content_type="application/json")
-        self.assertEqual(response.status_code, 413)
-        self.assertEqual(self.client.get("/nope").get_json()["error"], "Not found.")   # JSON, not HTML
+    def test_apply_saves_recipes_once_a_day(self):
+        from app import catalog
+        from app.database import Database
+        from app.models import Ingredient, Recipe
+        new = Recipe(name="Brand New Dish", cuisine="Indian", is_veg=True, prep_minutes=5, servings=1,
+                     ingredients=[Ingredient("Rice", 100, "g")], steps=["Cook"])
+        with tempfile.TemporaryDirectory() as folder:
+            db = Database(os.path.join(folder, "x.db"))
+            before = len(db.list_catalog_recipes())
+            catalog.apply_catalog(db, ("v2", [new]))                     # a download with one new recipe
+            self.assertEqual(len(db.list_catalog_recipes()), before + 1)
+            self.assertEqual(db.get_setting(catalog.VERSION), "v2")
+            self.assertFalse(catalog.sync_if_due(db, lambda *a: None))   # checked today -> no new check
+            db.close()
 
-    def test_health_and_catalogue(self):
-        self.assertEqual(self.client.get("/api/health").get_json()["status"], "ok")
-        veg = self.client.get("/api/recipes?diet=Veg").get_json()
-        self.assertTrue(veg["count"] > 0 and all(r["is_veg"] for r in veg["recipes"]))
-        self.assertEqual(self.client.get("/api/recipes/dal-tadka").get_json()["name"], "Dal Tadka")
-        self.assertEqual(self.client.get("/api/recipes/nope").status_code, 404)
-
-    def test_search_uses_fridge_expiry_and_sort(self):
-        pantry = [PantryItem("Curd", 300, "g", expiry=TODAY), PantryItem("Cucumber", 1, "pcs")]
-        body = {"pantry": [pantry_to_dict(p) for p in pantry], "appliances": ["Stove"], "servings": 1,
-                "filters": {"sort": "Most protein"}, "today": TODAY.isoformat(),
-                "now": "2026-10-04T13:00"}
-        answer = self.client.post("/api/recipes/search", json=body).get_json()
-        self.assertEqual(answer["meal"], "Lunch")        # from the phone's clock, not the server's
-        top = match_from_dict(answer["recommended"][0])
-        self.assertEqual(top.recipe.name, "Cucumber Raita")   # uses the curd expiring today
-        self.assertEqual(top.uses_expiring_today, ["Curd"])
-        proteins = [r["recipe"]["protein_g"] for r in answer["results"]]
-        self.assertEqual(proteins, sorted(proteins, reverse=True))   # "Most protein" order
-
-    def test_cloud_entry_point(self):
-        """server/wsgi.py (used by gunicorn in the cloud) must build a working app."""
-        import importlib
-        wsgi = importlib.import_module("server.wsgi")
-        response = wsgi.application.test_client().get("/api/health")
-        self.assertEqual(response.get_json()["status"], "ok")
-        wsgi.application.extensions["fridgechef_db"].close()
-
-    def test_bad_request(self):
-        self.assertEqual(self.client.post("/api/recipes/search", data="oops").status_code, 400)
-
-    def test_images_served(self):
-        response = self.client.get("/images/dal-tadka.jpg")
-        self.assertEqual(response.status_code, 200)
-        response.close()
+    def test_unsafe_picture_names_are_ignored(self):
+        from unittest import mock
+        from app import catalog
+        bad = dict(recipe_to_dict(SEED_RECIPES[0]), image="../../secret.jpg")
+        good = recipe_to_dict(SEED_RECIPES[1])
+        body = json.dumps({"version": "x", "recipes": [bad, good, {"broken": True}]}).encode()
+        with mock.patch.object(catalog, "_download", return_value=body):   # no real network
+            version, recipes = catalog.fetch_catalog()
+        self.assertEqual(version, "x")
+        self.assertEqual(len(recipes), 2)                                # the broken entry is skipped
+        self.assertIsNone(recipes[0].image_path)                         # "../../secret.jpg" dropped
+        self.assertEqual(recipes[1].image_path, SEED_RECIPES[1].image_path)
 
 
 if __name__ == "__main__":

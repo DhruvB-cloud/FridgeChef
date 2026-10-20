@@ -7,7 +7,6 @@ WHY THIS FILE EXISTS:
       * configures the window (phone-sized on desktop),
       * creates the database in the app's private data folder,
       * builds the screens and the rounded bottom tab bar (Fridge, Recipes, Cookbook, Calendar, Profile),
-      * knows the recipe server address (used by the Recipes tab),
       * handles "Back" (including the Android back button),
       * checks for items expiring today on start-up and every hour, sending a notification.
 """
@@ -22,11 +21,6 @@ if platform not in ("android", "ios"):             # on a PC, imitate a phone sc
 Config.set("input", "mouse", "mouse,multitouch_on_demand")   # no red dots on right-click (desktop)
 
 import os                                          # paths for data folders
-import subprocess                                  # start the local server as a separate process
-import sys                                         # sys.executable = the Python running this app
-import threading                                   # check / start the server without freezing the window
-import time                                        # short waits while the server starts
-from urllib.parse import urlparse                  # read the port number out of the server address
 
 from kivy.app import App                           # base class of every Kivy application
 from kivy.clock import Clock                       # timers (run something later / repeatedly)
@@ -39,8 +33,6 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import NoTransition, ScreenManager
 
 from app import images
-from app.api_client import ApiError, RecipeApiClient
-from app.config import DEFAULT_SERVER, is_local    # server address (local now, cloud later)
 from app.database import Database
 from app.expiry import notify_if_needed
 from app.ui.add_recipe_screen import AddRecipeScreen
@@ -145,8 +137,6 @@ class FridgeChefApp(App):
         """Runs once the window is visible."""
         if platform == "android":
             self._request_android_permissions()
-        else:
-            self._ensure_local_server()            # PC: start server/app.py if nobody else did
         Clock.schedule_once(lambda dt: self._maybe_welcome(), 0.5)  # 4.7.1: first start -> Welcome popup
         Clock.schedule_once(lambda dt: self.check_expiry(), 2)      # check 2 s after start-up
         Clock.schedule_interval(lambda dt: self.check_expiry(), 3600)   # and every hour after
@@ -160,62 +150,8 @@ class FridgeChefApp(App):
             show_welcome(self, on_done=lambda: screen.refresh() if hasattr(screen, "refresh") else None)
 
     def on_stop(self):
-        """Runs when the app closes - close the database cleanly (and our local server, if we started it)."""
+        """Runs when the app closes - close the database cleanly."""
         self.db.close()
-        if self.server_process is not None:        # only a server WE started, never someone else's
-            self.server_process.terminate()        # ask the server process to stop
-
-    # ------------------------------------------------------------------ local server (PC only)
-    server_process = None                          # the server/app.py process we started, if any
-
-    def _ensure_local_server(self):
-        """While developing on a PC, make sure the local recipe server is running.
-
-        If the address in Profile points to this computer (127.0.0.1) and nothing answers there,
-        start "python server/app.py" in the background. Runs on a background thread so the window
-        appears immediately; when the server is ready, the Recipes tab is refreshed.
-        """
-        url = self.server_url()                    # "" = online recipes switched off
-        if not url or not is_local(url):           # cloud server or offline mode -> nothing to start
-            return
-
-        def work():                                # runs on a background thread
-            client = RecipeApiClient(url, timeout=1)   # short timeout: it's on this computer
-            try:
-                client.health()                    # someone (e.g. you, in a terminal) already runs it
-                return
-            except ApiError:                       # nothing answered -> start it ourselves
-                pass
-            port = urlparse(url).port or 5000      # "http://127.0.0.1:5000" -> 5000
-            log = open(os.path.join(self.data_dir, "server.log"), "a")   # server messages go here
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: no extra black console window
-            self.server_process = subprocess.Popen(
-                [sys.executable, os.path.join(images.PROJECT_DIR, "server", "app.py")],   # same Python as the app
-                env=dict(os.environ, PORT=str(port)), stdout=log, stderr=log, creationflags=flags)
-            for _ in range(60):                    # wait up to ~15 s for it to answer
-                time.sleep(0.25)
-                try:
-                    client.health()                # ready!
-                    Clock.schedule_once(lambda dt: self._server_ready())   # back to the UI thread
-                    return
-                except ApiError:
-                    continue                       # not yet - keep waiting
-            print("[FridgeChef] Local server did not start - see server.log")
-        threading.Thread(target=work, daemon=True).start()
-
-    def _server_ready(self):
-        """The local server just came up: reload the Recipes tab if it is showing 'Offline'."""
-        if self.sm.current == "recipes":
-            self.sm.current_screen.refresh()
-
-    def server_url(self):
-        """Address of the recipe API: always the FridgeChef cloud server.
-
-        Version 4.7.1 removed the "Recipe server" card from the Profile tab, so the old saved
-        settings (use_server / server_url) are ignored on purpose - otherwise someone who had
-        switched it off or typed a wrong address could never switch it back.
-        """
-        return DEFAULT_SERVER                      # from config.py; offline -> the saved recipes are used
 
     def _give_old_recipes_pictures(self):
         """Recipes created with version 1 may have no picture - generate a soft default one."""

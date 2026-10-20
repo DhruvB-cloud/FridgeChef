@@ -8,7 +8,6 @@ WHY THIS FILE EXISTS:
 
     This class is the ONLY place in the app that writes SQL. The UI calls simple methods like
     db.add_pantry_item(item) and gets back the dataclasses from models.py.
-    The web server (server/app.py) reuses this same class for its own recipe catalogue.
 
 TABLES:
     pantry_items        - what is in the fridge / kitchen cupboard
@@ -110,7 +109,7 @@ class Database:
         if folder:                                         # "" means current folder - nothing to create
             os.makedirs(folder, exist_ok=True)             # exist_ok: no error if it already exists
         self.path = path                                   # remember where the file is (for debugging)
-        # check_same_thread=False is only used by the web server, which guards access with a lock.
+        # check_same_thread=False would let other threads use the connection (not used by the app).
         self.conn = sqlite3.connect(path, check_same_thread=check_same_thread)
         self.conn.row_factory = sqlite3.Row                # rows behave like dicts: row["name"]
         self.conn.execute("PRAGMA foreign_keys = ON")      # enforce ON DELETE CASCADE above

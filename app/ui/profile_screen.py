@@ -8,7 +8,7 @@ WHY THIS FILE EXISTS:
       * your longest streak, total meals cooked and your FAVOURITE DISH (most cooked),
       * settings: how many people you usually cook for (default 1), which cooking machines you own
         (this replaced the old Kitchen tab). (The recipe-server setting was removed in 4.7.1 -
-        the app always uses the FridgeChef cloud server, or the saved recipes when offline.)
+        recipes now come from the published catalogue, see app/catalog.py.)
     The numbers are calculated by app/stats.py from the cook_log table.
 """
 
