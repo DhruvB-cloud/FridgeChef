@@ -112,7 +112,7 @@ class DatePicker(BoxLayout):
             spinner.opacity = 0.45 if never else 1        # look faded when disabled
         chosen = self.get_date()                          # None when "never"
         if chosen is None:
-            self.preview.text = "[color=8a8f93]No expiry date[/color]"
+            self.preview.text = "[color=656b70]No expiry date[/color]"
         else:
             left = (chosen - today()).days                # days from today (negative = past)
             when = "today" if left == 0 else (f"in {left} days" if left > 0 else f"{-left} days ago")

@@ -85,6 +85,38 @@ def pretty_quantity(quantity, unit):
     return f"{round(quantity, 2):g} {unit}"               # otherwise at most two decimals
 
 
+def _quarters(quantity):
+    """Round to the nearest quarter and write it with fraction symbols: 1.5 -> '1½', 0.25 -> '¼'."""
+    quarters = round(quantity * 4) / 4
+    whole = int(quarters)
+    part = round(quarters - whole, 2)
+    if part == 0:
+        return str(whole)
+    return f"{whole if whole else ''}{FRACTION_SYMBOLS[part]}"
+
+
+def recipe_amount(quantity, unit):
+    """An ingredient amount as a person would say it (5.0 - QA: '0.05 bunch' looked odd).
+
+    Used for the ingredient list on a recipe page. The fridge keeps exact numbers (pretty_quantity).
+        0.1 tsp salt -> 'a pinch',  0.05 bunch coriander -> 'a few sprigs',
+        0.33 pcs lemon -> '¼ pcs',  1.5 tsp -> '1½ tsp',  12.5 g -> '13 g',  2.25 g -> '2.5 g'
+    """
+    quantity = float(quantity)
+    if unit in ("tsp", "tbsp"):
+        return "a pinch" if quantity < 0.2 else f"{_quarters(quantity)} {unit}"
+    if unit == "bunch":
+        return "a few sprigs" if quantity < 0.2 else f"{_quarters(quantity)} {unit}"
+    if unit in ("pcs", "cup"):
+        if quantity < 0.125:                              # less than an eighth of an onion...
+            return f"a little ({unit})" if unit == "cup" else "a little"
+        return f"{_quarters(quantity)} {unit}"
+    if unit in ("g", "ml"):                               # small weights to the half, others whole
+        value = round(quantity * 2) / 2 if quantity < 10 else round(quantity)
+        return f"{value:g} {unit}"
+    return pretty_quantity(quantity, unit)                 # kg, l: two decimals are fine
+
+
 # ----------------------------------------------------------------------------------------------
 # INGREDIENT NAME NORMALISATION
 # ----------------------------------------------------------------------------------------------

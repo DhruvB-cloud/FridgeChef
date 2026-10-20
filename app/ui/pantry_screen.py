@@ -22,6 +22,7 @@ from datetime import date, timedelta              # expiry dates
 from kivy.clock import Clock                      # hides the Undo bar after a few seconds
 from kivy.graphics import Color, Ellipse          # the coloured dot of each row
 from kivy.metrics import dp, sp
+from kivy.uix.behaviors import ButtonBehavior      # makes the tag chip tappable
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
@@ -51,7 +52,7 @@ def expiry_text(item):
     """'Expires on 25-10-2026 (in 7 days)' for the item popup."""
     left = item.days_left()
     if left is None:
-        return "[color=8a8f93]No expiry date[/color]"
+        return "[color=656b70]No expiry date[/color]"
     when = "today" if left == 0 else ("tomorrow" if left == 1 else f"in {left} days")
     text = f"Expires on [b]{format_date(item.expiry)}[/b] ({when})"
     return colored(text, HEX_RED) if left == 0 else text   # red on the last day
@@ -68,6 +69,10 @@ def short_expiry(item):
         return colored("use today", HEX_RED, bold=True)   # colored() escapes text, so bold is its own option
     if left <= 2:
         return colored(f"expires {'tomorrow' if left == 1 else 'in 2 days'}", HEX_AMBER)
+    if left >= 365:                                   # 5.0 QA: "expires in 365 days" read like a robot
+        return colored("keeps for a year", HEX_GREY)
+    if left > 60:
+        return colored("keeps for months", HEX_GREY)
     return colored(f"expires in {left} days", HEX_GREY)
 
 
@@ -236,6 +241,50 @@ class PantryScreen(Screen):
         self.refresh()
 
 
+class TagChip(ButtonBehavior, Chip):
+    """The coloured tag chip in the Add / Edit forms - tap it to choose another tag (5.0 QA)."""
+
+    def __init__(self, text, bg, fg, **kwargs):
+        # Kivy's ButtonBehavior runs first and only accepts NAMED values - passing them plainly
+        # crashed the Add form (the same trap as the Profile avatar in 4.7.1).
+        super().__init__(text=text, bg=bg, fg=fg, **kwargs)
+
+    def show(self, tag):
+        bg, fg, _icon = TAG_STYLES[tag]
+        self.text = tag
+        self._bg_color.rgba, self.color = bg, fg
+
+
+def tag_row(chip):
+    """[chip]  Tap to change   - one line for the forms."""
+    row = BoxLayout(size_hint_y=None, height=dp(30), spacing=dp(8))
+    chip.pos_hint = {"center_y": 0.5}
+    row.add_widget(chip)
+    hint = Label(text="Tap to change", color=MUTED, font_size=sp(12), halign="left", valign="middle")
+    hint.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+    row.add_widget(hint)
+    return row
+
+
+def pick_tag(current, on_pick):
+    """A small popup with all 9 tags as coloured buttons; on_pick(tag) runs for the chosen one."""
+    grid = GridLayout(cols=2, spacing=dp(8), size_hint_y=None)
+    grid.bind(minimum_height=grid.setter("height"))
+    box = BoxLayout(orientation="vertical", padding=dp(8), spacing=dp(10))
+    box.add_widget(grid)
+    popup = light_popup("Choose a tag", box, height=dp(380))
+    for tag in TAGS:
+        bg, fg, _icon = TAG_STYLES[tag]
+
+        def choose(*_, t=tag):
+            popup.dismiss()
+            on_pick(t)
+        button = SoftButton(("> " if tag == current else "") + tag, bg=bg, fg=fg, height=dp(46),
+                            font_size=sp(14), on_release=choose)
+        grid.add_widget(button)
+    popup.open()
+
+
 class EditItemPopup:
     """Tapping fresh food: change the quantity, or remove it from the fridge. Nothing else."""
 
@@ -243,6 +292,10 @@ class EditItemPopup:
         self.app, self.item, self.on_saved = app, item, on_saved
         box = BoxLayout(orientation="vertical", padding=dp(10), spacing=dp(10))
         box.add_widget(WrapLabel(text=expiry_text(item), font_size=sp(14)))   # shown, not changeable
+        self.tag = item.tag or guess_info(item.name).tag
+        self.tag_chip = TagChip(self.tag, *TAG_STYLES[self.tag][:2])
+        self.tag_chip.bind(on_release=lambda *_: pick_tag(self.tag, self._set_tag))
+        box.add_widget(tag_row(self.tag_chip))           # 5.0 QA: a wrong tag can be fixed here
         row = BoxLayout(spacing=dp(8))
         # 4.7.1: rule="qty" = positive, max 4 digits + 2 decimals; the old value is rounded to fit.
         self.qty_in = SoftInput(text=f"{round(item.quantity, 2):g}", rule="qty", hint_text="Quantity")
@@ -266,6 +319,10 @@ class EditItemPopup:
     def open(self):
         self.popup.open()
 
+    def _set_tag(self, tag):
+        self.tag = tag
+        self.tag_chip.show(tag)
+
     def _save(self):
         try:
             quantity = parse_quantity(self.qty_in.text)   # 4.7.1: friendly message if empty / 0 / odd
@@ -273,6 +330,7 @@ class EditItemPopup:
             self.error.text = f"{problem} (Or tap Remove from fridge.)"
             return
         self.item.quantity = quantity
+        self.item.tag = self.tag                          # the tag may have been changed too
         self.app.db.update_pantry_item(self.item)
         self.popup.dismiss()
         self.on_saved()
@@ -309,17 +367,16 @@ class AddItemPopup:
         form.add_widget(labeled("Amount", qty_row))
 
         # The tag chip, then "Expires 27-10-2026 (in 6 days)  [Change]" on its own line.
-        tag_row = BoxLayout(size_hint_y=None, height=dp(26))
-        self.tag_chip = Chip("Pantry", *TAG_STYLES["Pantry"][:2])
-        tag_row.add_widget(self.tag_chip)
-        tag_row.add_widget(Widget())                      # pushes the chip to the left
-        form.add_widget(tag_row)
-        expiry_row = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(8))
+        self._tag_chosen = False                          # True once the user picks a tag themselves
+        self.tag_chip = TagChip("Pantry", *TAG_STYLES["Pantry"][:2])
+        self.tag_chip.bind(on_release=lambda *_: pick_tag(self.tag, self._choose_tag))
+        form.add_widget(tag_row(self.tag_chip))           # 5.0 QA: the tag can be changed (optional)
+        expiry_row = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
         self.expiry_label = Label(text="", markup=True, color=INK, font_size=sp(14), halign="left",
                                   valign="middle", shorten=True, shorten_from="right")
         self.expiry_label.bind(size=lambda l, sz: setattr(l, "text_size", sz))
         expiry_row.add_widget(self.expiry_label)
-        expiry_row.add_widget(SoftButton("Change", size_hint=(None, None), size=(dp(84), dp(34)),
+        expiry_row.add_widget(SoftButton("Change", size_hint=(None, None), size=(dp(92), dp(44)),
                                          bg=NEUTRAL, fg=INK, font_size=sp(13),
                                          on_release=lambda *_: self._toggle_date_picker()))
         form.add_widget(expiry_row)
@@ -361,15 +418,21 @@ class AddItemPopup:
             if self._auto_qty is not None:                # the user hasn't typed an amount of their own
                 self._auto_qty = f"{info.default_qty:g}"  # e.g. "1" (L of milk) or "0.25" (kg)
                 self.qty_in.text = self._auto_qty
-            bg, fg, _icon = TAG_STYLES[info.tag]
-            self.tag_chip.text = info.tag
-            self.tag_chip._bg_color.rgba, self.tag_chip.color = bg, fg
+            if not self._tag_chosen:                      # don't overwrite a tag the user picked
+                self.tag_chip.show(info.tag)
             if not self._date_changed:                    # don't overwrite a date the user picked
                 self._setting_date = True
                 self.date_picker.set_date(date.today() + timedelta(days=info.shelf_days))
                 self._setting_date = False
-        self.tag = info.tag if info else "Pantry"
+        if not self._tag_chosen:
+            self.tag = info.tag if info else "Pantry"
         self._show_expiry()
+
+    def _choose_tag(self, tag):
+        """The user picked a tag in the picker: it wins over the catalogue's guess."""
+        self._tag_chosen = True
+        self.tag = tag
+        self.tag_chip.show(tag)
 
     def _show_expiry(self):
         """'Expires 27-10-2026 (in 6 days)' in the summary line."""

@@ -30,13 +30,12 @@ from kivy.uix.widget import Widget
 from app.catalog import apply_catalog, sync_if_due
 from app.dates import short_minutes
 from app.expiry import expiring_today
-from app.images import resolve_image
 from app.meal_time import current_meal
 from app.models import MEAL_TYPES, SORT_OPTIONS
 from app.recipe_engine import filter_matches, match_all
 from app.ui.widgets import (AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, INK, MUTED, NEUTRAL,
                             PRIMARY_DARK, PRIMARY_SOFT, STATUS_BADGE, WHITE, Card, Chip, Header, Pill,
-                            RoundImage, SoftButton, SoftInput, TapCard, WrapLabel, bg_rect, colored,
+                            SoftButton, SoftInput, TapCard, WrapLabel, bg_rect, colored, recipe_picture,
                             scroll_list, thumb_status)
 
 # The three views of the list: (key, label, colour of the chip when selected).
@@ -45,8 +44,8 @@ VIEWS = [("available", "Available", (0.20, 0.64, 0.46, 1)),    # emerald
          ("saved", "Saved", (0.91, 0.36, 0.48, 1))]               # raspberry (saved + your own)
 ROW_HEIGHT = dp(104)
 # A colour per cuisine (hex text for Kivy markup) - small touches of colour that blend with the badges.
-CUISINE_COLORS = {"Indian": "e0782f", "Arabic": "b0862a", "English": "4a72c4", "Italian": "3f9b5d",
-                  "Asian": "d1495b", "Mexican": "8e5bc9"}
+CUISINE_COLORS = {"Indian": "b9561a", "Arabic": "86650f", "English": "3b62b4", "Italian": "2d7b45",
+                  "Asian": "bb3448", "Mexican": "7a46b8"}      # 5.0 QA: dark enough to read as small text
 SAVED_PILL = ((1, 0.90, 0.93, 1), (0.85, 0.27, 0.42, 1))   # soft pink badge, raspberry text
 
 
@@ -93,7 +92,7 @@ class RecipeRow(TapCard):
         super().__init__(orientation="horizontal", padding=dp(10), spacing=dp(12), radius=dp(22), **kwargs)
         recipe = match.recipe
         holder = BoxLayout(size_hint=(None, None), size=(dp(84), dp(84)), pos_hint={"center_y": 0.5})
-        holder.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(18)))
+        holder.add_widget(recipe_picture(recipe, small=True, radius=dp(18)))   # photo, or a coloured letter
         self.add_widget(holder)
 
         text = BoxLayout(orientation="vertical", spacing=dp(2), size_hint_y=None, height=dp(84),
@@ -102,7 +101,7 @@ class RecipeRow(TapCard):
                      valign="top", max_lines=2, shorten=True, shorten_from="right")
         name.bind(size=lambda l, sz: setattr(l, "text_size", sz))
         text.add_widget(name)
-        cuisine_hex = CUISINE_COLORS.get(recipe.cuisine, "8a8f93")   # every cuisine has its own colour
+        cuisine_hex = CUISINE_COLORS.get(recipe.cuisine, "656b70")   # every cuisine has its own colour
         meta = Label(text=f"{short_minutes(recipe.prep_minutes)}  •  [color={cuisine_hex}][b]{recipe.cuisine}[/b][/color]",
                      markup=True, color=MUTED, font_size=sp(13), halign="left", valign="middle",
                      size_hint_y=None, height=dp(20))

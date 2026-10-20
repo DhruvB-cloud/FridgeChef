@@ -29,6 +29,7 @@ else:
             Config.remove_option("input", option)
 
 import os                                          # paths for data folders
+import time                                        # monotonic(): "press Back again to exit" (5.0)
 
 from kivy.animation import Animation               # the fade-in when the app opens (5.0)
 from kivy.app import App                           # base class of every Kivy application
@@ -50,7 +51,7 @@ from app.ui.profile_screen import ProfileScreen
 from app.ui.recipe_detail_screen import RecipeDetailScreen
 from app.ui.recipes_screen import RecipesScreen
 from app.ui.widgets import (BG, GRAD_PRIMARY, WHITE, bg_rect, icon_image, set_bg,
-                            ui_texture)
+                            show_toast, ui_texture)
 
 NAV_BAR = (0.09, 0.15, 0.13, 0.97)                # deep green-black floating tab bar (version 4.3)
 
@@ -234,7 +235,16 @@ class FridgeChefApp(App):
             if self.sm.current != "recipes":
                 self.navigate("recipes", from_tab=True)
                 return True
-        return False                               # on the Recipes tab: let Android close the app
+            # 5.0 QA: on the Recipes tab the first Back press only shows a note; a second press
+            # within 2 seconds closes the app (so it isn't closed by accident).
+            now = time.monotonic()
+            if now - self._last_back > 2:
+                self._last_back = now
+                show_toast("Press Back again to exit")
+                return True                        # handled: stay open
+        return False                               # second press: let Android close the app
+
+    _last_back = -10.0                             # when Back was last pressed on the Recipes tab
 
     # ------------------------------------------------------------------ expiry & permissions
     def check_expiry(self):

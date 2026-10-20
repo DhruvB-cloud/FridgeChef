@@ -140,13 +140,22 @@ class Database:
                                  ("bunch", "pcs", 1)):
             self.conn.execute("UPDATE pantry_items SET unit=?, quantity=round(quantity * ?, 3) WHERE unit=?",
                               (new, factor, old))
-        # ...and every item gets a tag: from the ingredient catalogue, or a sensible guess. Known
-        # ingredients always follow the catalogue, so tags added later (Dairy, Spice) reach old items too.
+        # ...and every item gets a tag: from the ingredient catalogue, or a sensible guess.
+        # ONCE (tags version 2: Dairy + Spice added) known ingredients follow the catalogue again;
+        # after that a tag the user picked (Edit / Add form) is never overwritten.
+        done = self.conn.execute("SELECT value FROM settings WHERE key='tags_version'").fetchone()
+        retag_all = done is None or done["value"] != "2"
         for row in self.conn.execute("SELECT id, name, tag FROM pantry_items").fetchall():
             known = info_for(row["name"])
-            tag = known.tag if known else (row["tag"] or guess_info(row["name"]).tag)
+            if row["tag"] is None:
+                tag = (known or guess_info(row["name"])).tag
+            elif retag_all and known:
+                tag = known.tag
+            else:
+                continue
             if tag != row["tag"]:
                 self.conn.execute("UPDATE pantry_items SET tag=? WHERE id=?", (tag, row["id"]))
+        self.conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('tags_version', '2')")
         # Old user recipes have no uid: give each a random one.
         for row in self.conn.execute("SELECT id FROM recipes WHERE uid IS NULL AND is_user=1").fetchall():
             self.conn.execute("UPDATE recipes SET uid=? WHERE id=?", (f"user-{uuid.uuid4().hex[:12]}", row["id"]))

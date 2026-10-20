@@ -61,15 +61,15 @@ DISPLAY = "Display"                                      # font_name for big hea
 BG = (0.973, 0.961, 0.937, 1)        # warm cream app background
 SURFACE = (1, 1, 1, 1)               # cards
 INK = (0.13, 0.16, 0.17, 1)          # main text (deep charcoal, not pure black)
-MUTED = (0.54, 0.56, 0.58, 1)        # secondary text
+MUTED = (0.40, 0.42, 0.44, 1)        # secondary text (5.0 QA: darker - 5.5:1 contrast instead of 3.3:1)
 PRIMARY = (0.20, 0.64, 0.46, 1)      # fresh emerald green - main buttons, active tab
 PRIMARY_DARK = (0.12, 0.47, 0.34, 1)  # deep green for text on light backgrounds
 PRIMARY_SOFT = (0.89, 0.95, 0.89, 1)  # very light sage - highlights
 PEACH = (0.96, 0.66, 0.53, 1)        # warm accent (streak, share)
 PEACH_SOFT = (0.99, 0.93, 0.89, 1)
-DANGER = (0.88, 0.45, 0.45, 1)       # soft red - delete, expires today
+DANGER = (0.78, 0.29, 0.29, 1)       # red - delete, expires today (5.0 QA: darker, readable as text)
 DANGER_SOFT = (0.99, 0.91, 0.91, 1)
-AMBER = (0.91, 0.65, 0.30, 1)
+AMBER = (0.56, 0.35, 0.03, 1)        # 5.0 QA: dark amber - the old one was 1.9:1 on its soft background
 AMBER_SOFT = (1, 0.95, 0.86, 1)
 BLUE = (0.47, 0.63, 0.85, 1)
 BLUE_SOFT = (0.90, 0.94, 0.99, 1)
@@ -108,7 +108,8 @@ TAB_ACCENTS = {                                          # header badge colour o
 }
 
 # The same colours as hex text, for Kivy "markup" like "[color=d0605f]text[/color]".
-HEX_RED, HEX_AMBER, HEX_GREEN, HEX_GREY, HEX_INK = "d0605f", "c98a2e", "4f8a5b", "8a8f93", "33383b"
+# 5.0 QA: red, amber and grey darkened so small text reaches ~4.5:1 contrast (easier to read outdoors).
+HEX_RED, HEX_AMBER, HEX_GREEN, HEX_GREY, HEX_INK = "b5413d", "93600a", "3f7a4b", "656b70", "33383b"
 
 # Rounded 9-slice images. border = how many pixels at each edge must NOT stretch (the corners).
 UI_DIR = os.path.join(ASSETS_DIR, "ui")
@@ -557,6 +558,25 @@ class TapCard(TapBehavior, Card):
     """A Card you can tap. Use bind(on_tap=...) - see TapBehavior for why not on_press."""
 
 
+# 5.0 QA: a soft tint + a strong colour per cuisine, for picture placeholders (same family as the
+# coloured cuisine names in the recipe list).
+CUISINE_TINTS = {"Indian": ((1.00, 0.91, 0.84, 1), (0.73, 0.34, 0.10, 1)),
+                 "Arabic": ((0.99, 0.94, 0.80, 1), (0.53, 0.40, 0.06, 1)),
+                 "English": ((0.88, 0.92, 1.00, 1), (0.23, 0.38, 0.71, 1)),
+                 "Italian": ((0.87, 0.96, 0.88, 1), (0.18, 0.48, 0.27, 1)),
+                 "Asian": ((1.00, 0.88, 0.90, 1), (0.73, 0.20, 0.28, 1)),
+                 "Mexican": ((0.93, 0.89, 1.00, 1), (0.48, 0.27, 0.72, 1))}
+
+
+def recipe_picture(recipe, small=False, **kwargs):
+    """The recipe's photo in a RoundImage - or, while it isn't on the phone yet, its first letter
+    on its cuisine's colour (instead of a grey box)."""
+    from app.images import resolve_image                  # local import keeps widgets.py light
+    tint, strong = CUISINE_TINTS.get(recipe.cuisine, (NEUTRAL, INK))
+    return RoundImage(resolve_image(recipe.picture, small=small), placeholder=tint,
+                      letter=(recipe.name[:1] or "?").upper(), letter_color=strong, **kwargs)
+
+
 class RoundImage(Widget):
     """A picture with rounded corners, cropped to fill its box (like CSS 'object-fit: cover').
 
@@ -564,13 +584,20 @@ class RoundImage(Widget):
     RoundedRectangle, using only the centre part of the picture that matches our shape.
     """
 
-    def __init__(self, source=None, radius=dp(16), placeholder=NEUTRAL, **kwargs):
+    def __init__(self, source=None, radius=dp(16), placeholder=NEUTRAL, letter=None, letter_color=INK,
+                 **kwargs):
         super().__init__(**kwargs)
         self._texture = None
         self._placeholder = placeholder
         with self.canvas:
             self._color = Color(*placeholder)
             self._rect = RoundedRectangle(radius=[radius])
+        # 5.0 QA: while there is no picture (e.g. a recipe photo not downloaded yet), show a big
+        # letter on the placeholder colour instead of an empty grey box.
+        self._letter = None
+        if letter:
+            self._letter = Label(text=f"[b]{escape(letter)}[/b]", markup=True, color=letter_color)
+            self.add_widget(self._letter)
         self.bind(pos=self._update, size=self._update)
         self.set_source(source)
 
@@ -601,6 +628,10 @@ class RoundImage(Widget):
     def _update(self, *_):
         self._rect.pos, self._rect.size = self.pos, self.size
         tex = self._texture
+        if self._letter is not None:                    # the letter only shows while there is no picture
+            self._letter.size, self._letter.pos = self.size, self.pos
+            self._letter.font_size = max(self.height * 0.42, 1)
+            self._letter.opacity = 0 if tex is not None else 1
         if tex is None or self.width <= 0 or self.height <= 0:
             self._rect.texture = None
             self._color.rgba = self._placeholder
@@ -749,6 +780,20 @@ def light_popup(title, content, size_hint=(0.92, None), height=None, auto_dismis
     if size_hint[1] is None:                             # caller chose a fixed height
         popup.height = height or dp(260)
     return popup
+
+
+def show_toast(text, seconds=2):
+    """A small dark note near the bottom of the screen that disappears by itself (5.0 QA).
+    Used for "Press Back again to exit"."""
+    from kivy.core.window import Window                   # local import: only needed here
+    toast = Label(text=text, color=WHITE, font_size=sp(14), size_hint=(None, None), halign="center")
+    toast.texture_update()                                # measure the text...
+    toast.size = (toast.texture_size[0] + dp(36), dp(42))  # ...and make the pill a bit bigger
+    toast.pos = ((Window.width - toast.width) / 2, dp(110))   # centred, above the tab bar
+    bg_rect(toast, (0.13, 0.16, 0.17, 0.92), radius=dp(21))
+    Window.add_widget(toast)
+    Clock.schedule_once(lambda dt: Window.remove_widget(toast), seconds)
+    return toast
 
 
 def show_message(title, text, height=dp(300)):
@@ -927,6 +972,6 @@ class Pill(Label):
         self.bind(texture_size=lambda *_: setattr(self, "width", self.texture_size[0] + dp(14)))
 
 
-STATUS_BADGE = {HEX_RED: (DANGER_SOFT, DANGER), HEX_AMBER: (AMBER_SOFT, (0.75, 0.48, 0.12, 1)),
+STATUS_BADGE = {HEX_RED: (DANGER_SOFT, (0.66, 0.20, 0.20, 1)), HEX_AMBER: (AMBER_SOFT, (0.58, 0.36, 0.03, 1)),
                 HEX_GREEN: (PRIMARY_SOFT, PRIMARY_DARK), HEX_GREY: (NEUTRAL, INK)}
 

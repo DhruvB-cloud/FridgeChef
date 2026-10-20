@@ -434,6 +434,46 @@ class Version50Test(unittest.TestCase):
         ordered = sorted([five_missing_uses_soon, one_missing], key=unavailable_rank)
         self.assertIs(ordered[0], one_missing)
 
+    def test_friendly_amounts_and_long_expiry(self):
+        from app.models import PantryItem
+        from app.ui.pantry_screen import short_expiry
+        from app.units import recipe_amount
+        self.assertEqual(recipe_amount(0.12, "tsp"), "a pinch")                   # not "0.12 tsp"
+        self.assertEqual(recipe_amount(0.05, "bunch"), "a few sprigs")            # not "0.05 bunch"
+        self.assertEqual(recipe_amount(1.5, "tsp"), "1½ tsp")
+        self.assertEqual(recipe_amount(0.33, "pcs"), "¼ pcs")
+        self.assertEqual(recipe_amount(250, "g"), "250 g")
+        today = date.today()
+        self.assertIn("keeps for a year", short_expiry(PantryItem("Rice", 1, "kg", expiry=today + timedelta(days=365))))
+        self.assertIn("keeps for months", short_expiry(PantryItem("Rice", 1, "kg", expiry=today + timedelta(days=90))))
+        self.assertIn("expires in 30 days", short_expiry(PantryItem("Rice", 1, "kg", expiry=today + timedelta(days=30))))
+
+    def test_a_tag_the_user_picked_survives_a_restart(self):
+        from app.database import Database
+        from app.models import PantryItem
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "x.db")
+            db = Database(path)
+            item_id = db.add_pantry_item(PantryItem("Milk", 1, "L", expiry=date.today()))
+            item = {i.id: i for i in db.list_pantry()}[item_id]
+            item.tag = "Frozen"                                                     # e.g. frozen milk
+            db.update_pantry_item(item)
+            db.close()
+            db = Database(path)                                                     # restart: no re-tagging
+            self.assertEqual({i.id: i for i in db.list_pantry()}[item_id].tag, "Frozen")
+            db.close()
+
+    def test_tappable_widgets_can_be_built(self):
+        # Kivy's ButtonBehavior only accepts named values: TagChip (5.0) and the Profile avatar (4.7.1)
+        # both crashed when their colours were passed plainly. Building them here catches that early.
+        from app.ui.pantry_screen import TagChip
+        from app.ui.profile_screen import TapCircle
+        from app.ui.widgets import TAG_STYLES
+        chip = TagChip("Dairy", *TAG_STYLES["Dairy"][:2])
+        chip.show("Spice")
+        self.assertEqual(chip.text, "Spice")
+        TapCircle((1, 1, 1, 1))
+
     def test_dairy_and_spice_tags(self):
         from app.ingredient_catalog import info_for
         self.assertEqual(info_for("Milk").tag, "Dairy")

@@ -22,7 +22,6 @@ from kivy.uix.widget import Widget
 
 from app import APP_VERSION
 from app.images import avatar_path
-from app.meal_time import current_meal
 from app.stats import current_streak, streak_message, week_strip
 from app.ui.welcome_popup import show_avatar_picker
 from app.validation import name_error                 # 4.7.1: the shared name rules
@@ -158,8 +157,10 @@ class ProfileScreen(Screen):
         c.add_widget(section_title("Settings"))
         servings = db.default_servings()
         sv = Card(spacing=dp(8))
-        sv.add_widget(WrapLabel(text="[b]Cooking for[/b]  (recipes and the fridge check use this)",
-                                font_size=sp(14)))
+        # 5.0 QA: plain words instead of "(recipes and the fridge check use this)".
+        sv.add_widget(WrapLabel(text="[b]How many people do you cook for?[/b]", font_size=sp(14)))
+        sv.add_widget(WrapLabel(text="Recipe amounts are worked out for this many people.",
+                                color=MUTED, font_size=sp(12.5)))
         row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
         row.add_widget(SoftButton("-", size_hint=(None, None), size=(dp(46), dp(46)), bg=NEUTRAL, fg=INK,
                                   on_release=lambda *_: self._set_servings(servings - 1)))
@@ -172,6 +173,8 @@ class ProfileScreen(Screen):
 
         kitchen = Card(spacing=dp(10))
         kitchen.add_widget(WrapLabel(text="[b]My cooking machines[/b]", font_size=sp(14)))
+        kitchen.add_widget(WrapLabel(text="Recipes only show dishes these can cook.", color=MUTED,
+                                     font_size=sp(12.5)))
         chips = StackLayout(size_hint_y=None, spacing=dp(8))
         chips.bind(minimum_height=chips.setter("height"))
         for appliance, owned in db.get_appliances().items():
@@ -185,9 +188,9 @@ class ProfileScreen(Screen):
 
         about = Card(shadow=False, color=(0, 0, 0, 0.03))
         about.add_widget(WrapLabel(
-            text=f"It's {current_meal()} time. Everything you enter is stored on this device, so the "
-                 f"app works without mobile data.\nData folder: {escape(self.app.data_dir)}\n"
-                 f"FridgeChef v{APP_VERSION}", color=MUTED, font_size=sp(12)))
+            # 5.0 QA: no technical folder path any more - just what a user wants to know.
+            text=f"Everything you add stays on your phone - FridgeChef works without mobile data.\n"
+                 f"FridgeChef {APP_VERSION}", color=MUTED, font_size=sp(12), halign="center"))
         c.add_widget(about)
 
     # ------------------------------------------------------------------ actions

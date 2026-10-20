@@ -32,13 +32,13 @@ from app.recipe_engine import build_pantry_index, match_recipe, plan_deduction
 from app.share import share_image
 from app.ui.cooked_popup import show_cooked_popup   # the "Yay!" message after cooking
 from app.stats import current_streak
-from app.units import ZERO_BELOW, pretty_quantity
+from app.units import ZERO_BELOW, pretty_quantity, recipe_amount
 from app.dates import short_minutes                  # "2 h 30" style cooking times (4.7.1)
 from app.ui.widgets import (BLUE, BLUE_SOFT, DANGER, DANGER_SOFT, HEX_AMBER, HEX_GREY, INK, MUTED,
                             NEUTRAL, PEACH_SOFT, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card,
                             Chip, ChipRow, Header, RoundImage, SoftButton, WrapLabel, colored,
                             confirm, diet_chip, escape, icon_image, recipe_status_lines,
-                            light_popup, scroll_list, section_title, show_message)
+                            light_popup, recipe_picture, scroll_list, section_title, show_message)
 
 
 def remove_old_cards(folder, keep=5):
@@ -120,7 +120,7 @@ class RecipeDetailScreen(Screen):
         c.clear_widgets()
 
         # --- photo (every recipe has one: bundled, downloaded, own photo or generated)
-        photo = RoundImage(resolve_image(recipe.picture), radius=dp(26), size_hint_y=None, height=dp(210))
+        photo = recipe_picture(recipe, radius=dp(26), size_hint_y=None, height=dp(210))   # or a coloured letter
         c.add_widget(photo)
         # 5.0: newer recipes' big photos are downloaded only when you open them (thumbnail meanwhile).
         fetch_full_photo(recipe.picture, lambda path: Clock.schedule_once(   # back to the UI thread
@@ -130,7 +130,7 @@ class RecipeDetailScreen(Screen):
         # --- chips
         chips = [diet_chip(recipe.is_veg), Chip(recipe.cuisine, BLUE_SOFT, BLUE),
                  Chip(short_minutes(recipe.prep_minutes), NEUTRAL, INK)]
-        chips += [Chip(t, PEACH_SOFT, (0.70, 0.40, 0.28, 1)) for t in recipe.nutrition_tags]
+        chips += [Chip(t, PEACH_SOFT, (0.60, 0.32, 0.18, 1)) for t in recipe.nutrition_tags]
         c.add_widget(ChipRow(chips))
 
         # --- nutrition boxes (per person)
@@ -167,15 +167,15 @@ class RecipeDetailScreen(Screen):
         have = {id(i) for i in match.have}                 # id() = identity of each Ingredient object
         for ing in recipe.ingredients:
             line = BoxLayout(size_hint_y=None, height=dp(28), spacing=dp(8))
-            amount = pretty_quantity(ing.quantity * scale, ing.unit)
-            line.add_widget(WrapLabel(text=f"{escape(ing.name)}  [color=8a8f93]{amount}[/color]",
+            amount = recipe_amount(ing.quantity * scale, ing.unit)   # 5.0: "a pinch", "¼ pcs" - not "0.05 bunch"
+            line.add_widget(WrapLabel(text=f"{escape(ing.name)}  [color=656b70]{amount}[/color]",
                                       shorten=True, max_lines=1))
             if id(ing) in have:
                 chip = Chip("have", PRIMARY_SOFT, PRIMARY_DARK)
             elif ing.optional:
                 chip = Chip("optional", NEUTRAL, MUTED)
             else:
-                chip = Chip("missing", DANGER_SOFT, DANGER)
+                chip = Chip("missing", DANGER_SOFT, (0.66, 0.20, 0.20, 1))   # 5.0 QA: 5.6:1 contrast
             chip.pos_hint = {"center_y": 0.5}
             line.add_widget(chip)
             ing_card.add_widget(line)
@@ -322,7 +322,7 @@ class RecipeDetailScreen(Screen):
     # ------------------------------------------------------------------ photo (version 4.7)
     def _photo_row(self, recipe):
         """Under the photo: who took it (built-in photos) and the 'Change photo' buttons."""
-        row = BoxLayout(size_hint_y=None, height=dp(36), spacing=dp(8))
+        row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
         credit = photo_credit(recipe.image_path)
         if recipe.custom_image and recipe.picture == recipe.custom_image:
             text = "[i]Your photo[/i]"
@@ -337,14 +337,14 @@ class RecipeDetailScreen(Screen):
             label.bind(on_touch_down=lambda l, t: self._show_credit(credit) if l.collide_point(*t.pos) else None)
         row.add_widget(label)
         if recipe.custom_image:                            # undo: back to the original picture
-            row.add_widget(SoftButton("Use original", size_hint=(None, None), size=(dp(104), dp(34)),
+            row.add_widget(SoftButton("Use original", size_hint=(None, None), size=(dp(108), dp(44)),
                                       bg=NEUTRAL, fg=INK, font_size=sp(12.5),
                                       on_release=lambda *_: self._set_photo(None)))
         # Version 4.7.1: your own photo only makes sense once you have cooked the dish, so the
         # button appears after the first "Finished - update fridge" (and not in cooking mode).
         if self.app.db.times_cooked(recipe.id) > 0 and not self.cooking:
-            row.add_widget(SoftButton("Change photo", size_hint=(None, None), size=(dp(112), dp(34)),
-                                      bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(12.5),
+            row.add_widget(SoftButton("Change photo", size_hint=(None, None), size=(dp(120), dp(44)),
+                                      bg=PEACH_SOFT, fg=(0.60, 0.32, 0.18, 1), font_size=sp(12.5),
                                       on_release=lambda *_: pick_image(self._photo_picked)))
         return row
 
