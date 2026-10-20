@@ -7,7 +7,8 @@ WHY THIS FILE EXISTS:
       * a Duolingo-style cooking STREAK (days in a row you cooked) with this week's 7 circles,
       * your longest streak, total meals cooked and your FAVOURITE DISH (most cooked),
       * settings: how many people you usually cook for (default 1), which cooking machines you own
-        (this replaced the old Kitchen tab), and the address of the recipe server.
+        (this replaced the old Kitchen tab). (The recipe-server setting was removed in 4.7.1 -
+        the app always uses the FridgeChef cloud server, or the saved recipes when offline.)
     The numbers are calculated by app/stats.py from the cook_log table.
 """
 
@@ -21,7 +22,6 @@ from kivy.uix.stacklayout import StackLayout
 from kivy.uix.widget import Widget
 
 from app import APP_VERSION
-from app.api_client import DEFAULT_SERVER, RecipeApiClient
 from app.images import resolve_image
 from app.meal_time import current_meal
 from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
@@ -162,7 +162,7 @@ class ProfileScreen(Screen):
             fav.add_widget(text)
             fav.add_widget(centered(icon_image("star", dp(30))))
             if entry["recipe_exists"]:
-                fav.bind(on_press=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_press = no delay
+                fav.bind(on_tap=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_tap = real taps only, not swipes
             c.add_widget(fav)
         else:
             empty = Card(shadow=False)
@@ -199,28 +199,6 @@ class ProfileScreen(Screen):
         kitchen.add_widget(chips)
         c.add_widget(kitchen)
 
-        server = Card(spacing=dp(10))
-        server.add_widget(WrapLabel(text="[b]Recipe server[/b]", font_size=sp(14)))
-        server.add_widget(WrapLabel(
-            text="The Recipes tab asks this server for recipes. Normally leave it on the default "
-                 "(the FridgeChef cloud server). Without a connection the app uses the recipes "
-                 "saved on this device.", color=MUTED, font_size=sp(13)))
-        use = SoftToggle("Use online recipes", state="down" if db.get_setting("use_server", "1") == "1" else "normal")
-        use.bind(state=lambda btn, state: db.set_setting("use_server", "1" if state == "down" else "0"))
-        server.add_widget(use)
-        url_in = SoftInput(text=db.get_setting("server_url", DEFAULT_SERVER), hint_text=DEFAULT_SERVER)
-        url_in.bind(text=lambda inp, text: db.set_setting("server_url", text.strip()))
-        server.add_widget(url_in)
-        self.server_status = WrapLabel(text="", font_size=sp(13), color=MUTED)
-        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))            # two buttons side by side
-        buttons.add_widget(SoftButton("Use default server", bg=NEUTRAL, fg=INK,         # forget a typed address...
-                                      on_release=lambda *_: setattr(url_in, "text", DEFAULT_SERVER)))   # ...and use config.py's (the bind above saves it)
-        buttons.add_widget(SoftButton("Test connection", bg=NEUTRAL, fg=INK,
-                                      on_release=lambda *_: self._test_server(url_in.text.strip())))
-        server.add_widget(buttons)
-        server.add_widget(self.server_status)
-        c.add_widget(server)
-
         about = Card(shadow=False, color=(0, 0, 0, 0.03))
         about.add_widget(WrapLabel(
             text=f"It's {current_meal()} time. Everything you enter is stored on this device, so the "
@@ -232,17 +210,3 @@ class ProfileScreen(Screen):
     def _set_servings(self, value):
         self.app.db.set_setting("default_servings", max(1, min(20, value)))
         self.refresh()
-
-    def _test_server(self, url):
-        """Call GET /api/health in the background and show the result."""
-        self.server_status.text = "Checking..."
-        import threading
-
-        def work():
-            try:
-                info = RecipeApiClient(url).health()
-                text = f"[color=4f8a5b][b]Connected[/b][/color] - {info.get('recipes', '?')} recipes available"
-            except Exception as error:
-                text = f"[color=d0605f][b]Not reachable[/b][/color] - {escape(error)}"
-            Clock.schedule_once(lambda dt: setattr(self.server_status, "text", text))
-        threading.Thread(target=work, daemon=True).start()

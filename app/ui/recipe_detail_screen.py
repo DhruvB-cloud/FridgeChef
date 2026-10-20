@@ -333,9 +333,12 @@ class RecipeDetailScreen(Screen):
             row.add_widget(SoftButton("Use original", size_hint=(None, None), size=(dp(104), dp(34)),
                                       bg=NEUTRAL, fg=INK, font_size=sp(12.5),
                                       on_release=lambda *_: self._set_photo(None)))
-        row.add_widget(SoftButton("Change photo", size_hint=(None, None), size=(dp(112), dp(34)),
-                                  bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(12.5),
-                                  on_release=lambda *_: pick_image(self._photo_picked)))
+        # Version 4.7.1: your own photo only makes sense once you have cooked the dish, so the
+        # button appears after the first "Finished - update fridge" (and not in cooking mode).
+        if self.app.db.times_cooked(recipe.id) > 0 and not self.cooking:
+            row.add_widget(SoftButton("Change photo", size_hint=(None, None), size=(dp(112), dp(34)),
+                                      bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(12.5),
+                                      on_release=lambda *_: pick_image(self._photo_picked)))
         return row
 
     @staticmethod

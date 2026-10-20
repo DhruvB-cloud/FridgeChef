@@ -17,7 +17,6 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Line, PopMatrix, PushMatrix, Rectangle, Scale, Triangle
 from kivy.metrics import dp, sp
 from kivy.properties import NumericProperty       # a value Animation can change smoothly
-from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout      # lets the cover lie ON TOP of the pages
 from kivy.uix.label import Label
@@ -25,7 +24,7 @@ from kivy.uix.screenmanager import Screen
 
 from app.images import resolve_image
 from app.recipe_engine import build_pantry_index, match_recipe
-from app.ui.widgets import (HEX_GREY, SCENES, Header, RoundImage, Scene, bg_rect, escape,
+from app.ui.widgets import (HEX_GREY, SCENES, Header, RoundImage, Scene, TapBehavior, bg_rect, escape,
                             icon_image, primary_action, scroll_list, thumb_status)
 
 BOOK = SCENES["book"]                             # leather + paper colours (shared scene styles)
@@ -84,7 +83,7 @@ class BookCover(BoxLayout):
         anim.start(self)
 
 
-class IndexLine(ButtonBehavior, BoxLayout):
+class IndexLine(TapBehavior, BoxLayout):
     """One recipe in the book's contents: small picture, name, details - and a dotted line under it."""
 
     def __init__(self, match, on_open, **kwargs):
@@ -108,7 +107,7 @@ class IndexLine(ButtonBehavior, BoxLayout):
             Color(*INK_BROWN[:3], 0.14)
             self._dots = Line(width=1)
         self.bind(pos=self._draw, size=self._draw)
-        self.bind(on_press=lambda *_: on_open(recipe.id))   # on_press = no 0.2 s delay in lists
+        self.bind(on_tap=lambda *_: on_open(recipe.id))     # on_tap = real taps only, not swipes
 
     def _draw(self, *_):
         self._dots.points = [self.x + dp(64), self.y, self.right, self.y]

@@ -194,10 +194,13 @@ class FridgeChefApp(App):
             self.sm.current_screen.refresh()
 
     def server_url(self):
-        """Address of the recipe API, or "" when the user turned online recipes off (Profile tab)."""
-        if self.db.get_setting("use_server", "1") != "1":
-            return ""
-        return (self.db.get_setting("server_url", DEFAULT_SERVER) or "").strip()
+        """Address of the recipe API: always the FridgeChef cloud server.
+
+        Version 4.7.1 removed the "Recipe server" card from the Profile tab, so the old saved
+        settings (use_server / server_url) are ignored on purpose - otherwise someone who had
+        switched it off or typed a wrong address could never switch it back.
+        """
+        return DEFAULT_SERVER                      # from config.py; offline -> the saved recipes are used
 
     def _give_old_recipes_pictures(self):
         """Recipes created with version 1 may have no picture - generate a soft default one."""

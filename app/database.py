@@ -448,6 +448,12 @@ class Database:
         sql += " ORDER BY c.cooked_on DESC"
         return [dict(r) for r in self.conn.execute(sql, params)]
 
+    def times_cooked(self, recipe_id):
+        """How often this recipe was cooked (0 = never). Version 4.7.1: 'Change photo' needs at least 1."""
+        row = self.conn.execute("SELECT COUNT(*) AS n FROM cook_log WHERE recipe_id=?",   # count its history rows
+                                (recipe_id,)).fetchone()
+        return row["n"]                                    # the number SQLite counted
+
     def cooked_days(self):
         """Set of dates on which something was cooked (for streaks)."""
         rows = self.conn.execute("SELECT DISTINCT substr(cooked_on, 1, 10) AS d FROM cook_log")

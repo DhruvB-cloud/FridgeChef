@@ -460,13 +460,47 @@ class Card(BoxLayout):
         bg_rect(self, color, radius=radius, shadow=shadow)
 
 
-class TapCard(ButtonBehavior, Card):
-    """A Card you can tap (ButtonBehavior adds on_press / on_release events).
+TAP_SLOP = dp(12)                                  # a finger may wobble this far and still count as a tap
 
-    Tip: inside scrolling lists use on_press, not on_release. Kivy's ScrollView only passes on a
-    touch once it knows it is a tap (not a swipe) and then delays the "release" by 0.2 seconds,
-    so on_release made every card feel slow (fixed in version 4.0.1).
+
+class TapBehavior(ButtonBehavior):
+    """Adds an 'on_tap' event: fired only for a real TAP (finger lifted without sliding away).
+
+    Why not on_press (version 4.7.1 fix): inside a scrolling list, Kivy's ScrollView waits a
+    quarter of a second to see whether the finger moves. If it doesn't (you rested your thumb
+    before swiping, or the phone was busy drawing), Kivy treats the touch as a press - and
+    on_press opened a recipe the moment you tried to scroll.
+    Why not plain on_release: for quick taps ScrollView delays the release by 0.2 seconds, which
+    made every card feel slow (the reason 4.0.1 switched to on_press).
+    So on_tap fires:
+      * at once, when ScrollView hands over a touch whose finger is ALREADY lifted (a quick tap);
+      * otherwise on release - but only if the finger stayed within TAP_SLOP of where it started.
     """
+    __events__ = ("on_tap",)                           # tells Kivy this widget has an 'on_tap' event
+
+    def on_press(self):
+        touch = self.last_touch                        # the touch that pressed us (set by ButtonBehavior)
+        if touch.time_end != -1:                       # time_end is set when the finger lifts -> quick tap
+            self._fire_tap(touch)                      # react immediately, no 0.2 s wait
+
+    def on_release(self):
+        touch = self.last_touch                        # the same touch, now ending
+        moved = max(abs(touch.x - touch.ox), abs(touch.y - touch.oy))   # distance from where it started
+        if moved <= TAP_SLOP:                          # it stayed put: a tap, not a swipe
+            self._fire_tap(touch)
+
+    def _fire_tap(self, touch):
+        key = f"tapped_{id(self)}"                     # remember per touch, so one tap fires only once
+        if not touch.ud.get(key):                      # touch.ud = a dict that travels with the touch
+            touch.ud[key] = True
+            self.dispatch("on_tap")                    # run whatever was bound with bind(on_tap=...)
+
+    def on_tap(self):
+        pass                                           # default handler; Kivy requires one per event
+
+
+class TapCard(TapBehavior, Card):
+    """A Card you can tap. Use bind(on_tap=...) - see TapBehavior for why not on_press."""
 
 
 class SideScroller(ScrollView):
@@ -733,7 +767,7 @@ class RecipeTile(TapCard):
         for line in recipe_status_lines(match):
             text_col.add_widget(WrapLabel(text=line, font_size=sp(13)))
         self.add_widget(text_col)
-        self.bind(on_press=lambda *_: on_open(recipe.id))     # tap -> open the recipe (on_press = no delay)
+        self.bind(on_tap=lambda *_: on_open(recipe.id))       # tap -> open the recipe (real taps only, not swipes)
 
 
 class RecipeCard(TapCard):
@@ -756,7 +790,7 @@ class RecipeCard(TapCard):
         lines = recipe_status_lines(match)
         if lines:                                        # only the most important status line
             self.add_widget(WrapLabel(text=lines[0], font_size=sp(12), max_lines=2))
-        self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists
+        self.bind(on_tap=lambda *_: on_open(recipe.id))       # on_tap = real taps only, not swipes
 
 
 
@@ -876,7 +910,7 @@ STATUS_BADGE = {HEX_RED: (DANGER_SOFT, DANGER), HEX_AMBER: (AMBER_SOFT, (0.75, 0
                 HEX_GREEN: (PRIMARY_SOFT, PRIMARY_DARK), HEX_GREY: (NEUTRAL, INK)}
 
 
-class RecipeThumb(ButtonBehavior, FloatLayout):
+class RecipeThumb(TapBehavior, FloatLayout):
     """A recipe as a modern photo card: the picture fills the card, the name sits on a dark fade
     at the bottom, and two floating badges show the status and the cooking time."""
 
@@ -908,4 +942,4 @@ class RecipeThumb(ButtonBehavior, FloatLayout):
         self.add_widget(Pill(escape(text), bg, fg, pos_hint={"x": 0.06, "top": 0.95}))
         self.add_widget(Pill(f"{recipe.prep_minutes} min", (0.08, 0.08, 0.08, 0.5), WHITE,
                              pos_hint={"right": 0.94, "top": 0.95}))
-        self.bind(on_press=lambda *_: on_open(recipe.id))     # on_press = no 0.2 s delay in lists
+        self.bind(on_tap=lambda *_: on_open(recipe.id))       # on_tap = real taps only, not swipes

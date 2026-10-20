@@ -153,6 +153,20 @@ class Version4Test(unittest.TestCase):
                              (log_id, "C:/photos/dish.jpg", "Test Dish"))
             db.close()
 
+    def test_times_cooked_unlocks_change_photo(self):
+        # 4.7.1: "Change photo" only shows once the recipe was cooked, using db.times_cooked().
+        from app.database import Database
+        from app.models import Recipe
+        with tempfile.TemporaryDirectory() as folder:
+            db = Database(os.path.join(folder, "x.db"))                  # a fresh, empty database
+            rid = db.add_recipe(Recipe(name="Test Dish", cuisine="Indian", is_veg=True,
+                                       prep_minutes=5, servings=1, steps=["Cook"]))
+            self.assertEqual(db.times_cooked(rid), 0)                     # never cooked -> no button
+            db.log_cooked(rid, 1)                                         # cook it twice
+            db.log_cooked(rid, 2)
+            self.assertEqual(db.times_cooked(rid), 2)                     # counted -> button shows
+            db.close()
+
     def test_old_share_cards_are_tidied(self):
         import time
         from app.ui.recipe_detail_screen import remove_old_cards

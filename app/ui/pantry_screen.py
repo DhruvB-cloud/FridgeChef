@@ -52,7 +52,7 @@ from app.ui.date_picker import DatePicker         # Day / Month / Year drop-down
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
 from app.ui.widgets import (EGG_FILL, NONVEG_FILL, VEG_FILL,
                             DANGER, DANGER_SOFT, HEX_RED, INK, INPUT_BG, MUTED, NEUTRAL,
-                            SELECTED_FILL, WHITE, Card, Header, Scene, SoftButton, SoftDropDown,
+                            SELECTED_FILL, WHITE, Card, Header, Scene, SoftButton, SoftDropDown, TapBehavior,
                             gradient_texture,
                             SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, labeled,
                             light_popup, primary_action, scroll_list, set_bg, show_message)
@@ -153,7 +153,7 @@ class ContainerArt(FloatLayout):
         label.font_size = fit_font(label.text, width, height)
 
 
-class ItemTile(ButtonBehavior, Widget):
+class ItemTile(TapBehavior, Widget):
     """One item standing on a shelf. `shrink` and `lift` drive the remove animation."""
 
     shrink = NumericProperty(1)                       # 1 = normal size, 0 = gone
@@ -172,8 +172,8 @@ class ItemTile(ButtonBehavior, Widget):
         self.art = ContainerArt(item.kept_in(), item.name, expired=item.is_expired())
         self.add_widget(self.art)
         self.bind(pos=self._place, size=self._place, shrink=self._place, lift=self._place)
-        # on_press (finger down), not on_release: inside a scrolling page it reacts at once (4.0.1)
-        self.bind(on_press=lambda *_: on_open(item))
+        # on_tap (4.7.1): opens on a real tap only, so resting a thumb to scroll no longer opens it
+        self.bind(on_tap=lambda *_: on_open(item))
 
     def _place(self, *_):
         """Stand the picture on the bottom of the tile, centred, as wide as fits."""

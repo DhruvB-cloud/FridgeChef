@@ -212,5 +212,5 @@ class CalendarScreen(Screen):
         if photo:                                        # your photo, big, under the dish name
             card.add_widget(RoundImage(photo, radius=dp(16), size_hint_y=None, height=dp(190)))
         if entry["recipe_exists"]:                       # recipe not deleted -> open it on tap
-            card.bind(on_press=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_press = no delay
+            card.bind(on_tap=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_tap = real taps only, not swipes
         return card
