@@ -428,9 +428,9 @@ class Version50Test(unittest.TestCase):
         self.assertEqual(info_for("Bread").default_qty, 12)
         self.assertEqual(normalize_name("Olive oil"), normalize_name("Oil"))
         dish = Recipe(name="x", cuisine="Indian", is_veg=True, prep_minutes=5, servings=1)
-        five_missing_uses_soon = RecipeMatch(recipe=dish, missing=[Ingredient("a", 1, "g")] * 5,
+        five_missing_uses_soon = RecipeMatch(recipe=dish, servings=1, missing=[Ingredient("a", 1, "g")] * 5,
                                              uses_expiring_soon=["Chicken"])
-        one_missing = RecipeMatch(recipe=dish, missing=[Ingredient("a", 1, "g")])
+        one_missing = RecipeMatch(recipe=dish, servings=1, missing=[Ingredient("a", 1, "g")])
         ordered = sorted([five_missing_uses_soon, one_missing], key=unavailable_rank)
         self.assertIs(ordered[0], one_missing)
 
