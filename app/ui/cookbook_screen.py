@@ -22,6 +22,7 @@ from kivy.uix.floatlayout import FloatLayout      # lets the cover lie ON TOP of
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
+from app.dates import short_minutes                  # "2 h 30" style cooking times (4.7.1)
 from app.images import resolve_image
 from app.recipe_engine import build_pantry_index, match_recipe
 from app.ui.widgets import (HEX_GREY, SCENES, Header, RoundImage, Scene, TapBehavior, bg_rect, escape,
@@ -96,7 +97,7 @@ class IndexLine(TapBehavior, BoxLayout):
         name = Label(text=f"[b]{escape(recipe.name)}[/b]", markup=True, color=INK_BROWN, font_size=sp(15),
                      halign="left", valign="bottom", shorten=True)
         status, hex_color = thumb_status(match)
-        details = Label(text=f"[color={HEX_GREY}]{recipe.prep_minutes} min • {escape(recipe.cuisine)}"
+        details = Label(text=f"[color={HEX_GREY}]{short_minutes(recipe.prep_minutes)} • {escape(recipe.cuisine)}"
                              f"[/color]   [color={hex_color}][b]{escape(status)}[/b][/color]",
                         markup=True, font_size=sp(12), halign="left", valign="top", shorten=True)
         for label in (name, details):

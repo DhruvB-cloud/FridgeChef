@@ -20,6 +20,7 @@ from kivy.clock import Clock                            # run something on the n
 from kivy.loader import Loader                          # loads pictures on background threads
 from kivy.utils import platform                         # 'android', 'win', ... (keyboard fix below)
 from kivy.core.text import LabelBase                    # register the app's own fonts
+from kivy.core.text.markup import MarkupLabel as CoreMarkupLabel   # measures text width (title fitting, 4.7.1)
 from kivy.graphics import (ClearBuffers, ClearColor, Color, Fbo, Line, Rectangle,   # low-level drawing instructions
                            RoundedRectangle)                                    # (Fbo = off-screen canvas, for cropping)
 from kivy.graphics.texture import Texture               # home-made gradient pictures
@@ -40,6 +41,9 @@ from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
 from app.images import ASSETS_DIR, resolve_image
+from app.dates import short_minutes                  # "2 h 30" on recipe cards (4.7.1)
+from app.validation import (INT_TYPING, NAME_MAX, QTY_TYPING, STEPS_MAX,   # typing rules (4.7.1)
+                            clean_name_chars)
 
 # ----------------------------------------------------------------------------------------------
 # FONTS (version 4.3) - Poppins, a modern rounded font (free, SIL Open Font License, see
@@ -376,7 +380,13 @@ class SoftInput(TextInput):
     box light red / yellow / green for non-veg / egg / veg items.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, rule=None, max_value=None, **kwargs):
+        # rule (version 4.7.1, see app/validation.py) decides what may be TYPED or pasted:
+        #   "name"  - letters, numbers, spaces, ' - , . & ( ) and at most 126 characters
+        #   "qty"   - a positive number: at most 4 digits, optionally . and 2 decimals
+        #   "int"   - digits only; max_value (e.g. 14400) caps the number
+        #   "steps" - free text, at most 3000 characters
+        self.rule, self.max_value = rule, max_value
         kwargs.setdefault("multiline", False)
         kwargs.setdefault("size_hint_y", None)
         _default_height(kwargs, dp(46))
@@ -423,6 +433,27 @@ class SoftInput(TextInput):
         elif platform == "android":                        # focused, but the keyboard may be hidden:
             self.focus = False                             # dropping and regaining focus makes Android
             self.focus = True                              # show the keyboard again
+
+    def insert_text(self, substring, from_undo=False):
+        """Kivy calls this for every key press and paste: refuse what the box's rule forbids."""
+        if self.rule is None or from_undo:                 # no rule (or undoing): normal behaviour
+            return super().insert_text(substring, from_undo=from_undo)
+        if self.rule == "name":                            # silently drop emoji / symbols...
+            substring = clean_name_chars(substring.replace("\n", " "))
+            room = NAME_MAX - len(self.text)               # ...and anything past 126 characters
+            substring = substring[:max(0, room)]
+        elif self.rule == "steps":
+            substring = substring[:max(0, STEPS_MAX - len(self.text))]   # cut at 3000 characters
+        else:                                              # number boxes: check the RESULT of the edit
+            i = self.cursor_index()                        # where the new text would go
+            new = self.text[:i] + substring + self.text[i:]
+            pattern = QTY_TYPING if self.rule == "qty" else INT_TYPING
+            if not pattern.fullmatch(new):                 # e.g. a minus sign, a letter, a 5th digit
+                return                                     # -> ignore this key press
+            if self.max_value is not None and new and int(float(new)) > self.max_value:
+                return                                     # e.g. typing 20000 minutes (max 14400)
+        if substring:
+            super().insert_text(substring, from_undo=from_undo)
 
     def set_tint(self, color):
         """Use a fixed fill colour (or None to go back to grey / green-when-selected)."""
@@ -612,6 +643,26 @@ def cropped_texture(tex, x, y, w, h):
     return fbo.texture                                  # the finished, cropped picture
 
 
+def shrink_to_fit(label, largest, smallest, font_name=None):
+    """Keep a one-line label's font as big as possible (largest..smallest sp) while the whole text
+    fits its width; refits whenever the width or text changes. Below `smallest` the label's own
+    shorten=True adds "...". (4.7.1: titles were cut off on narrow phones.)"""
+    def fit(*_):
+        if label.width <= 1:                             # not laid out yet
+            return
+        size = sp(largest)
+        while size > sp(smallest):
+            probe = CoreMarkupLabel(text=label.text, font_size=size, bold=label.bold,   # measures text
+                                    font_name=font_name or label.font_name, markup=True)
+            probe.refresh()                              # draw it off-screen to learn its width
+            if probe.texture.width <= label.width:       # fits -> keep this size
+                break
+            size -= sp(1)                                # too wide -> try one size smaller
+        label.font_size = size
+    label.bind(width=fit, text=fit)
+    fit()
+
+
 class Header(BoxLayout):
     """Big friendly title at the top of a screen, with an optional subtitle, Back button and
     a slot on the right (e.g. the 'Live' status chip on the Recipes tab)."""
@@ -635,10 +686,13 @@ class Header(BoxLayout):
         self.title_label = Label(text=title, font_name=DISPLAY, font_size=sp(24), color=INK,
                                  halign="left", valign="bottom", shorten=True, markup=True)
         self.subtitle_label = Label(text=subtitle, font_size=sp(13), color=MUTED, halign="left",
-                                    valign="top", size_hint_y=0.6, markup=True, shorten=True)
+                                    valign="top", size_hint_y=0.6, markup=True, shorten=True,
+                                    shorten_from="right")      # 4.7.1: "For 1 person • li..." reads better
         for label in (self.title_label, self.subtitle_label):
             label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align inside
             texts.add_widget(label)
+        # 4.7.1: on narrow phones long titles were cut ("What's...oking?") - shrink the font to fit.
+        shrink_to_fit(self.title_label, largest=24, smallest=14, font_name=DISPLAY)
         self.add_widget(texts)
         # Optional right-hand slot. (Not called "right": Kivy already uses that name for x + width.)
         self.right_slot = BoxLayout(size_hint_x=None, width=0, padding=(0, dp(10)))
@@ -782,7 +836,7 @@ class RecipeTile(TapCard):
         text_col = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
         text_col.bind(minimum_height=text_col.setter("height"))
         text_col.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(16)))
-        chips = [diet_chip(recipe.is_veg), Chip(f"{recipe.prep_minutes} min", NEUTRAL, INK),
+        chips = [diet_chip(recipe.is_veg), Chip(short_minutes(recipe.prep_minutes), NEUTRAL, INK),
                  Chip(recipe.cuisine, BLUE_SOFT, (0.30, 0.42, 0.62, 1))]
         if recipe.protein_g:
             chips.append(Chip(f"{recipe.protein_g:g}g protein", PEACH_SOFT, (0.70, 0.40, 0.28, 1)))
@@ -806,7 +860,7 @@ class RecipeCard(TapCard):
                                    size_hint_y=None, height=dp(112)))
         self.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(14),
                                   max_lines=2, shorten=True, shorten_from="right"))
-        info = f"{recipe.prep_minutes} min"
+        info = short_minutes(recipe.prep_minutes)
         if recipe.protein_g:
             info += f" • {recipe.protein_g:g}g protein"
         self.add_widget(WrapLabel(text=info, font_size=sp(12), color=MUTED))
@@ -962,7 +1016,21 @@ class RecipeThumb(TapBehavior, FloatLayout):
         self.add_widget(name)
         text, hex_color = thumb_status(match)
         bg, fg = STATUS_BADGE[hex_color]
-        self.add_widget(Pill(escape(text), bg, fg, pos_hint={"x": 0.06, "top": 0.95}))
-        self.add_widget(Pill(f"{recipe.prep_minutes} min", (0.08, 0.08, 0.08, 0.5), WHITE,
-                             pos_hint={"right": 0.94, "top": 0.95}))
+        self.status_pill = Pill(escape(text), bg, fg, pos_hint={"x": 0.06, "top": 0.95})
+        self.add_widget(self.status_pill)
+        self.time_pill = Pill(short_minutes(recipe.prep_minutes), (0.08, 0.08, 0.08, 0.5), WHITE,
+                              pos_hint={"right": 0.94, "top": 0.95})   # 4.7.1: "2 h 30" instead of "150 min"
+        self.add_widget(self.time_pill)
+        # 4.7.1: on narrow cards the two badges collided - then the time badge moves under the status one.
+        for w in (self, self.status_pill, self.time_pill):
+            w.bind(width=self._place_pills)
         self.bind(on_tap=lambda *_: on_open(recipe.id))       # on_tap = real taps only, not swipes
+
+    def _place_pills(self, *_):
+        """Side by side when there is room, otherwise stacked on the left."""
+        room = self.width * 0.88                          # the space between the two 6 % margins
+        if self.status_pill.width + self.time_pill.width + dp(6) <= room:
+            self.time_pill.pos_hint = {"right": 0.94, "top": 0.95}            # top-right corner
+        else:
+            below = 0.95 - (self.status_pill.height + dp(4)) / max(self.height, 1)   # just under the first
+            self.time_pill.pos_hint = {"x": 0.06, "top": below}

@@ -47,6 +47,7 @@ from app.images import CONTAINER_ART, icon        # picture sizes + label positi
 from app.ingredient_catalog import food_type      # "nonveg" / "egg" / "veg"
 from app.models import CONTAINER_LABELS, CONTAINER_PLACE, CONTAINERS, PantryItem
 from app.units import UNIT_CHOICES
+from app.validation import name_error, parse_quantity   # 4.7.1: shared input rules
 from app.ui.autocomplete import AutoCompleteInput
 from app.ui.date_picker import DatePicker         # Day / Month / Year drop-downs
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
@@ -101,13 +102,30 @@ def _text_size(text, font_size, wrap_width=None):
 
 
 def fit_font(text, width, height, largest=13, smallest=8):
-    """The biggest font size at which `text` fits in the box without cutting a word in two."""
+    """The biggest font size at which `text` fits in the box without cutting a word in two (or None)."""
     for size in range(largest, smallest - 1, -1):     # try 13, 12, 11 ... 8
         font = sp(size)
         widest_word = max(_text_size(word, font)[0] for word in (text.split() or [text]))
         if widest_word <= width and _text_size(text, font, width)[1] <= height:
             return font
-    return sp(smallest)                               # still too long: smallest size (end is cut off)
+    return None                                       # does not fit even at the smallest size
+
+
+def fit_label_text(text, width, height, smallest=8):
+    """(text, font) that fits the box: the full name if possible, else a shortened "Long nam..."
+
+    4.7.1: before, a name too long even at the smallest font spilled out of the jar's label.
+    """
+    font = fit_font(text, width, height, smallest=smallest)
+    if font is not None:                              # the whole name fits
+        return text, font
+    font = sp(smallest)
+    for end in range(len(text) - 1, 0, -1):           # drop one character at a time from the end
+        short = text[:end].rstrip() + "…"             # "…" = one ellipsis character
+        widest = max(_text_size(word, font)[0] for word in short.split())
+        if widest <= width and _text_size(short, font, width)[1] <= height:
+            return short, font
+    return "…", font                                  # a box too tiny for any letter
 
 
 def expiry_text(item):
@@ -126,6 +144,7 @@ class ContainerArt(FloatLayout):
     def __init__(self, kind, name, expired=False, **kwargs):
         super().__init__(size_hint=(None, None), **kwargs)
         self.kind = kind
+        self.full_name = name                         # kept whole; the label may show a shortened copy
         w, h = CONTAINER_ART[kind]["size"]
         left, top, right, bottom = CONTAINER_ART[kind]["label"]   # design units, y = 0 at the top
         picture = f"container_{kind}_expired" if expired else f"container_{kind}"   # green = gone bad
@@ -150,7 +169,7 @@ class ContainerArt(FloatLayout):
         """The label changed size: wrap the name inside it with the biggest font that fits."""
         width, height = max(size[0] - dp(6), 1), max(size[1] - dp(2), 1)   # a little inner margin
         label.text_size = (width, height)
-        label.font_size = fit_font(label.text, width, height)
+        label.text, label.font_size = fit_label_text(self.full_name, width, height)   # 4.7.1: "…" if too long
 
 
 class ItemTile(TapBehavior, Widget):
@@ -401,7 +420,8 @@ class EditItemPopup:
         box = BoxLayout(orientation="vertical", padding=dp(10), spacing=dp(10))
         box.add_widget(WrapLabel(text=expiry_text(item), font_size=sp(14)))   # shown, not changeable
         row = BoxLayout(spacing=dp(8))
-        self.qty_in = SoftInput(text=f"{item.quantity:g}", input_filter="float", hint_text="Quantity")
+        # 4.7.1: rule="qty" = positive, max 4 digits + 2 decimals; the old value is rounded to fit.
+        self.qty_in = SoftInput(text=f"{round(item.quantity, 2):g}", rule="qty", hint_text="Quantity")
         row.add_widget(self.qty_in)
         row.add_widget(Label(text=item.unit, color=INK, font_size=sp(15), size_hint_x=0.35))   # e.g. "pcs"
         box.add_widget(labeled("Quantity", row))
@@ -424,11 +444,9 @@ class EditItemPopup:
 
     def _save(self):
         try:
-            quantity = float(self.qty_in.text)
-            if quantity <= 0:
-                raise ValueError
-        except ValueError:                                # empty or zero
-            self.error.text = "Please enter a quantity greater than 0 (or tap Remove from fridge)."
+            quantity = parse_quantity(self.qty_in.text)   # 4.7.1: friendly message if empty / 0 / odd
+        except ValueError as problem:
+            self.error.text = f"{problem} (Or tap Remove from fridge.)"
             return
         self.item.quantity = quantity
         self.app.db.update_pantry_item(self.item)
@@ -504,7 +522,7 @@ class AddItemPopup:
         name_row = BoxLayout(spacing=dp(8))
         self.container_btn = ContainerButton("jar")
         name_row.add_widget(self.container_btn)
-        self.name_in = AutoCompleteInput(text="", hint_text="Start typing, e.g. oni...",
+        self.name_in = AutoCompleteInput(text="", hint_text="Start typing, e.g. oni...", rule="name",   # 4.7.1
                                          extra_names=app.db.ingredient_names(),
                                          on_pick=self._picked)
         name_row.add_widget(self.name_in)
@@ -515,7 +533,7 @@ class AddItemPopup:
         self.name_in.bind(text=lambda *_: self._show_food_type())
 
         qty_row = BoxLayout(spacing=dp(8))
-        self.qty_in = SoftInput(text="", input_filter="float", hint_text="Quantity")   # numbers only
+        self.qty_in = SoftInput(text="", rule="qty", hint_text="Quantity")   # 4.7.1: positive, max 9999.99
         self.unit_in = SoftSpinner(text="pcs", values=UNIT_CHOICES, size_hint_x=0.6)
         qty_row.add_widget(self.qty_in)
         qty_row.add_widget(self.unit_in)
@@ -562,8 +580,9 @@ class AddItemPopup:
     def _save(self):
         """Validate the form, then add the item to the database."""
         name = self.name_in.text.strip()
-        if not name:
-            self.error.text = "Please enter a name."
+        problem = name_error(name, "name")                # 4.7.1: empty, over 126 characters, odd symbols
+        if problem:
+            self.error.text = problem
             return
         if is_love(name):                                 # easter egg: "love" is never stored
             self.popup.dismiss()                          # close the form...
@@ -573,11 +592,9 @@ class AddItemPopup:
             self.error.text = "Water is always in your fridge - no need to add it."
             return
         try:
-            quantity = float(self.qty_in.text)
-            if quantity <= 0:
-                raise ValueError
-        except ValueError:                                # empty or zero quantity
-            self.error.text = "Please enter a quantity greater than 0."
+            quantity = parse_quantity(self.qty_in.text)   # 4.7.1: positive number, max 9999.99
+        except ValueError as problem:
+            self.error.text = str(problem)
             return
         expiry = self.date_picker.get_date()
         if expiry < date.today():

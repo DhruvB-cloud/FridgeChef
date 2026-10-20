@@ -306,6 +306,71 @@ except ImportError:
     HAVE_FLASK = False
 
 
+class Version471Test(unittest.TestCase):
+    """The input rules and display fixes from the 4.7.1 QA report."""
+
+    def test_name_rules(self):
+        from app.validation import NAME_MAX, clean_name_chars, name_error
+        self.assertIsNone(name_error("Mum's Rajma (spicy) - v2.0, & more"))   # everyday marks are fine
+        self.assertIsNone(name_error("पनीर भुर्जी"))                           # letters in any language
+        self.assertIsNotNone(name_error("   "))                                 # empty
+        self.assertIsNotNone(name_error("A" * (NAME_MAX + 1)))                  # 127 characters
+        self.assertIsNone(name_error("A" * NAME_MAX))                           # exactly 126 is allowed
+        self.assertIsNotNone(name_error("Curry 🍛"))                            # emoji
+        self.assertIsNotNone(name_error("<script>"))                            # symbols
+        self.assertEqual(clean_name_chars("Dal; <b>tadka</b> 🍛!"), "Dal btadkab ")
+
+    def test_number_rules(self):
+        from app.validation import parse_quantity, parse_whole
+        self.assertEqual(parse_quantity("9999.99"), 9999.99)                   # the biggest quantity
+        self.assertEqual(parse_quantity("", allow_zero=True), 0.0)              # optional box left empty
+        for bad in ("", ".", "-5", "0", "10000", "1.234", "1e3", "abc", "nan", "inf"):
+            with self.assertRaises(ValueError, msg=bad):
+                parse_quantity(bad)
+        self.assertEqual(parse_whole("14400", "minutes", 1, 14400), 14400)
+        for bad in ("0", "14401", "-1", "9" * 25, "", "1.5"):
+            with self.assertRaises(ValueError, msg=bad):
+                parse_whole(bad, "minutes", 1, 14400)
+
+    def test_short_minutes(self):
+        from app.dates import short_minutes
+        self.assertEqual([short_minutes(m) for m in (45, 60, 90, 1440, 1500, 14400)],
+                         ["45 min", "1 h", "1 h 30", "1 d", "1 d 1 h", "10 d"])
+
+    def test_tiny_quantities_are_zero(self):
+        from app.units import pretty_quantity
+        self.assertEqual(pretty_quantity(0.0004, "kg"), "0 kg")                 # below 0.001 -> 0
+        self.assertEqual(pretty_quantity(0.004, "kg"), "0.004 kg")              # not hidden as "0"
+
+    def test_longest_first_is_the_default_sort(self):
+        from app.models import SORT_OPTIONS
+        from app.recipe_engine import match_all, sort_matches
+        self.assertEqual(SORT_OPTIONS[0], "Longest first")
+        ordered = sort_matches(match_all(SEED_RECIPES, [], {"Stove"}), SORT_OPTIONS[0])
+        minutes = [m.recipe.prep_minutes for m in ordered]
+        self.assertEqual(minutes, sorted(minutes, reverse=True))               # most minutes first
+
+    def test_photo_limits(self):
+        from PIL import Image
+        from app.ui.image_picker import MAX_BYTES, PhotoError, import_image
+        with tempfile.TemporaryDirectory() as folder:
+            small = os.path.join(folder, "ok.png")
+            Image.new("RGB", (3000, 2000), "red").save(small)
+            out = import_image(small, os.path.join(folder, "out"))
+            with Image.open(out) as result:
+                self.assertEqual(result.size, (1280, 853))                     # shrunk, shape kept
+            big = os.path.join(folder, "big.jpg")
+            with open(big, "wb") as f:
+                f.write(b"\xff" * (MAX_BYTES + 10))                              # just over 5 MB
+            with self.assertRaises(PhotoError):
+                import_image(big, folder)
+            junk = os.path.join(folder, "junk.jpg")
+            with open(junk, "wb") as f:
+                f.write(b"not a picture")
+            with self.assertRaises(PhotoError):
+                import_image(junk, folder)
+
+
 @unittest.skipUnless(HAVE_FLASK, "Flask not installed")
 class ApiTest(unittest.TestCase):
     def setUp(self):
@@ -317,6 +382,27 @@ class ApiTest(unittest.TestCase):
     def tearDown(self):
         self.app.extensions["fridgechef_db"].close()      # Windows can't delete an open file
         self.folder.cleanup()
+
+    def test_bad_requests_get_clear_400s_never_500s(self):
+        # 4.7.1: each of these used to crash the server (HTTP 500) or was wrongly accepted.
+        import json
+        item = {"name": "Potato", "quantity": 1, "unit": "kg"}
+        bodies = [{"filters": [1, 2]}, {"filters": {"max_minutes": "abc"}}, {"servings": -5},
+                  {"servings": 10 ** 18}, {"servings": "abc"}, {"appliances": "Stove"},
+                  {"pantry": [dict(item, quantity=-1)]}, {"pantry": ["potato"]},
+                  {"pantry": [dict(item, name="")]}, {"today": "yesterday"}]
+        for body in bodies:
+            response = self.client.post("/api/recipes/search", json=body)
+            self.assertEqual(response.status_code, 400, body)
+            self.assertNotIn("Traceback", response.get_json()["error"])
+        for raw in ('{"pantry": [{"name": "x", "quantity": NaN, "unit": "g"}]}',   # NaN is not a number
+                    '{"pantry":' + "[" * 5000 + "]" * 5000 + "}"):                 # absurd nesting
+            response = self.client.post("/api/recipes/search", data=raw, content_type="application/json")
+            self.assertEqual(response.status_code, 400)
+        huge = json.dumps({"pantry": [dict(item, name=f"Item {i}") for i in range(20000)]})   # > 256 KB
+        response = self.client.post("/api/recipes/search", data=huge, content_type="application/json")
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(self.client.get("/nope").get_json()["error"], "Not found.")   # JSON, not HTML
 
     def test_health_and_catalogue(self):
         self.assertEqual(self.client.get("/api/health").get_json()["status"], "ok")

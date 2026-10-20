@@ -198,13 +198,16 @@ class CalendarScreen(Screen):
         time_text = datetime.fromisoformat(entry["cooked_on"]).strftime("%H:%M")
         people = "1 person" if entry["servings"] == 1 else f"{entry['servings']} people"
         text.add_widget(WrapLabel(text=f"[b]{escape(entry['recipe_name'])}[/b]", font_size=sp(16),
+                                  shorten=True, max_lines=1, shorten_from="right"))   # "Grandmother's..."
+        # 4.7.1: ONE line, shortened with "..." if needed. On narrow phones this text used to wrap
+        # onto many lines, grow taller than its row and spill over the calendar grid above.
+        text.add_widget(WrapLabel(text=f"{time_text} • {people}", color=MUTED, font_size=sp(13),
                                   shorten=True, max_lines=1))
-        text.add_widget(WrapLabel(text=f"Cooked at {time_text} • for {people}", color=MUTED, font_size=sp(13)))
         row.add_widget(text)
         photo = entry["photo_path"] if entry["photo_path"] and os.path.exists(entry["photo_path"]) else None
         # "Add photo" / "Change photo" - attach your own picture of the dish to this calendar entry.
         row.add_widget(SoftButton("Change photo" if photo else "Add photo", size_hint=(None, None),
-                                  size=(dp(110), dp(36)), pos_hint={"center_y": 0.5},
+                                  size=(dp(104), dp(36)), pos_hint={"center_y": 0.5},
                                   bg=PEACH_SOFT, fg=(0.70, 0.40, 0.28, 1), font_size=sp(13),
                                   on_release=lambda *_: attach_photo(self.app, entry["id"],
                                                                      on_done=lambda p: self.refresh())))

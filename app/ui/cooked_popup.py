@@ -40,8 +40,8 @@ def attach_photo(app, log_id, on_done=None):
     def picked(path):
         try:
             stored = import_image(path, cooked_photos_dir(app))   # resized copy in our own folder
-        except Exception as error:                                # not an image / unreadable
-            show_message("Photo problem", f"Could not use this file:\n{escape(error)}")
+        except Exception as error:                                # 4.7.1: PhotoError text is already friendly
+            show_message("Photo problem", escape(str(error)))
             return
         app.db.set_cook_photo(log_id, stored)                    # remember it in the calendar
         if on_done:

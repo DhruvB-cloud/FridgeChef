@@ -18,7 +18,8 @@ source.include_exts = py,png,jpg,jpeg,ttf,json,txt
 # Folders that must NOT be packed into the APK: tests, the desktop virtual environment, the web
 # server (it runs on a computer, not the phone) and the developer asset tools.
 # The assets/ folder (recipe pictures, icons, rounded UI shapes) IS included.
-source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs
+# local_data = the app's data when run on a PC (4.7.1) - it must never end up inside an APK.
+source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs,local_data
 # App version shown in Android settings.
 version = 4.7.1
 # Python packages bundled into the APK:
@@ -40,10 +41,10 @@ fullscreen = 0
 # Permissions:
 #   INTERNET               - the Recipes tab calls the FridgeChef web API
 #   POST_NOTIFICATIONS     - "Curd expires today" notifications (Android 13+ asks the user)
-#   READ_MEDIA_IMAGES      - pick a recipe photo from the gallery (Android 13+)
-#   READ_EXTERNAL_STORAGE  - same, for Android 12 and older
+#   (4.7.1: no photo permissions any more - the system photo picker gives access to the ONE
+#    chosen picture without them, and Google Play restricts READ_MEDIA_IMAGES.)
 #   WRITE_EXTERNAL_STORAGE - save the share card to the gallery on Android 9 and older only
-android.permissions = INTERNET, POST_NOTIFICATIONS, READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, (name=android.permission.WRITE_EXTERNAL_STORAGE;maxSdkVersion=28)
+android.permissions = INTERNET, POST_NOTIFICATIONS, (name=android.permission.WRITE_EXTERNAL_STORAGE;maxSdkVersion=28)
 # Target a recent Android version (required by the Play Store) and support Android 7.0+.
 # api 36 + ndk 29 are the values Buildozer's docs require for python-for-android "develop".
 android.api = 36
@@ -52,8 +53,8 @@ android.ndk = 29
 # CPU type to build for. arm64-v8a = 64-bit ARM, used by practically every phone from ~2017 on.
 # (Add ", armeabi-v7a" for very old 32-bit phones - the build then takes about twice as long.)
 android.archs = arm64-v8a
-# Let users back up / restore the app data with their Google account.
-android.allow_backup = True
+# 4.7.1: no automatic backup of the app's data (name, cooking history, photos) to Google's cloud.
+android.allow_backup = False
 # Accept the Android SDK licence automatically - the build runs unattended on GitHub's computers.
 android.accept_sdk_license = True
 # A release build makes an .apk (installable file) instead of the default .aab (Play Store only).

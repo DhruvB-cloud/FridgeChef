@@ -21,6 +21,7 @@ from kivy.uix.stacklayout import StackLayout       # wraps chips onto new lines 
 from app.images import make_default_image
 from app.models import APPLIANCES, CUISINES, MEAL_TYPES, NUTRITION_TAGS, Ingredient, Recipe
 from app.units import UNIT_CHOICES
+from app.validation import MINUTES_MAX, SERVINGS_MAX, name_error, parse_quantity, parse_whole
 from app.ui.autocomplete import AutoCompleteInput
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
 from app.ui.image_picker import import_image, pick_image
@@ -56,9 +57,9 @@ class IngredientRow(BoxLayout):
 
     def __init__(self, on_remove, known_names, **kwargs):
         super().__init__(size_hint_y=None, height=dp(44), spacing=dp(6), **kwargs)
-        self.name_in = AutoCompleteInput(hint_text="Ingredient", size_hint_x=0.4, height=dp(44),
+        self.name_in = AutoCompleteInput(hint_text="Ingredient", size_hint_x=0.4, height=dp(44), rule="name",
                                          extra_names=known_names, on_pick=self._picked)
-        self.qty_in = SoftInput(hint_text="Qty", input_filter="float", size_hint_x=0.17, height=dp(44))
+        self.qty_in = SoftInput(hint_text="Qty", rule="qty", size_hint_x=0.17, height=dp(44))   # 4.7.1: max 9999.99
         self.unit_in = SoftSpinner(text="g", values=UNIT_CHOICES, size_hint_x=0.18, height=dp(44))
         self.optional = SoftToggle("opt", size_hint_x=0.13, height=dp(44), font_size=sp(13))
         for widget in (self.name_in, self.qty_in, self.unit_in, self.optional):
@@ -77,12 +78,10 @@ class IngredientRow(BoxLayout):
         name = self.name_in.text.strip()
         if not name:
             return None                                   # blank rows are simply ignored
-        try:
-            qty = float(self.qty_in.text)
-        except ValueError:
-            raise ValueError(f"Enter a quantity for '{name}'.")
-        if qty <= 0:
-            raise ValueError(f"Quantity for '{name}' must be greater than 0.")
+        problem = name_error(name, "ingredient name")    # 4.7.1: same rules as typing allows
+        if problem:
+            raise ValueError(problem)
+        qty = parse_quantity(self.qty_in.text, f"quantity for '{name}'")   # friendly ValueError if bad
         return Ingredient(name=name, quantity=qty, unit=self.unit_in.text,
                           optional=self.optional.state == "down")
 
@@ -111,19 +110,20 @@ class AddRecipeScreen(Screen):
 
         # --- basic info
         basics = Card(spacing=dp(10))
-        self.name_in = SoftInput(hint_text="e.g. Mum's Rajma")
+        self.name_in = SoftInput(hint_text="e.g. Mum's Rajma", rule="name")   # max 126 characters
         basics.add_widget(labeled("Dish name", self.name_in))
         grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None)
         grid.bind(minimum_height=grid.setter("height"))
         self.cuisine = SoftSpinner(text=CUISINES[0], values=CUISINES)
         self.diet = SoftSpinner(text="Veg", values=["Veg", "Non-Veg"])
-        self.minutes = SoftInput(text="20", input_filter="int")
-        self.servings = SoftInput(text="1", input_filter="int")      # default: 1 person
-        self.protein = SoftInput(hint_text="optional", input_filter="float")
-        self.carbs = SoftInput(hint_text="optional", input_filter="float")
-        self.calories = SoftInput(hint_text="optional", input_filter="float")
+        # 4.7.1: typing is limited right in the boxes (see app/validation.py for the rules).
+        self.minutes = SoftInput(text="20", rule="int", max_value=MINUTES_MAX)   # 1 to 14,400 minutes
+        self.servings = SoftInput(text="1", rule="int", max_value=SERVINGS_MAX)  # default: 1 person, max 20
+        self.protein = SoftInput(hint_text="optional", rule="qty")   # never negative, max 9999.99
+        self.carbs = SoftInput(hint_text="optional", rule="qty")
+        self.calories = SoftInput(hint_text="optional", rule="qty")
         for caption, widget in (("Cuisine", self.cuisine), ("Type", self.diet),
-                                ("Prep time (minutes)", self.minutes), ("Servings", self.servings),
+                                ("Prep time (minutes)", self.minutes), (f"Servings (1-{SERVINGS_MAX})", self.servings),
                                 ("Protein per serving (g)", self.protein),
                                 ("Carbs per serving (g)", self.carbs),
                                 ("Calories per serving", self.calories)):
@@ -161,7 +161,7 @@ class AddRecipeScreen(Screen):
         # --- steps
         steps_card = Card(spacing=dp(10))
         steps_card.add_widget(section_title("Steps (one per line)", 16))
-        self.steps_in = SoftInput(multiline=True, height=dp(160),
+        self.steps_in = SoftInput(multiline=True, height=dp(160), rule="steps",   # max 3000 characters
                                   hint_text="Chop the onions\nFry in oil until golden\n...")
         steps_card.add_widget(self.steps_in)
         form.add_widget(steps_card)
@@ -210,22 +210,18 @@ class AddRecipeScreen(Screen):
         """Copy the chosen photo into the app folder and show a preview."""
         try:
             self.image_path = import_image(path, self.app.images_dir)
-        except Exception as error:                        # not an image, or unreadable
-            show_message("Photo problem", f"Could not use this file:\n{escape(error)}")
+        except Exception as error:                        # 4.7.1: PhotoError text is already friendly
+            show_message("Photo problem", escape(str(error)))
             return
         self.preview.set_source(self.image_path)
         self.photo_hint.text = "Looks delicious!"
 
-    @staticmethod
-    def _number(box):
-        """Optional number box -> float (empty = 0)."""
-        return float(box.text) if box.text.strip() else 0.0
-
     def _save(self):
         """Validate everything and store the recipe."""
         name = self.name_in.text.strip()
-        if not name:
-            self.error.text = "Please give your dish a name."
+        problem = name_error(name, "dish name")           # 4.7.1: empty, too long or odd characters
+        if problem:
+            self.error.text = problem
             return
         # Easter egg - checked BEFORE the quantity checks, so "love" needs no quantity.
         love_rows = [row for row in self.ing_rows.children if is_love(row.name_in.text)]
@@ -235,11 +231,12 @@ class AddRecipeScreen(Screen):
             play_hearts()                                 # ...and the hearts fly instead
             return                                        # the user can now finish and save normally
         try:
-            minutes = int(self.minutes.text or 0)
-            servings = int(self.servings.text or 0)
-            if minutes <= 0 or servings <= 0:
-                raise ValueError("Prep time and servings must be greater than 0.")
-            protein, carbs, calories = (self._number(b) for b in (self.protein, self.carbs, self.calories))
+            # 4.7.1: ranges are checked here too (the boxes already block most bad typing).
+            minutes = parse_whole(self.minutes.text, "prep time (minutes)", 1, MINUTES_MAX)
+            servings = parse_whole(self.servings.text, "number of servings", 1, SERVINGS_MAX)
+            protein, carbs, calories = (parse_quantity(box.text, what, allow_zero=True)   # empty = 0
+                                        for box, what in ((self.protein, "protein"), (self.carbs, "carbs"),
+                                                          (self.calories, "calories")))
             # Rows are added top-to-bottom but Kivy stores children newest-first, so reverse.
             ingredients = [ing for row in reversed(self.ing_rows.children)
                            if (ing := row.to_ingredient()) is not None]   # ':=' assigns and tests
@@ -265,6 +262,11 @@ class AddRecipeScreen(Screen):
             protein_g=protein, carbs_g=carbs, calories=calories,
             image_path=image, is_user=True, is_saved=True,
         )
-        recipe_id = self.app.db.add_recipe(recipe)
+        try:
+            recipe_id = self.app.db.add_recipe(recipe)
+        except Exception as error:                        # never close the app over a save problem
+            print(f"[FridgeChef] Saving the recipe failed: {error!r}")   # details for the developer log
+            self.error.text = "Sorry, the recipe could not be saved. Please check the details and try again."
+            return
         self.reset()
         self.app.open_recipe(recipe_id, replace=True)     # show the new recipe straight away

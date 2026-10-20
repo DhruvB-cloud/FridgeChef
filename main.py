@@ -300,12 +300,16 @@ class FridgeChefApp(App):
             screen.refresh()
 
     def _request_android_permissions(self):
-        """Ask for notification + photo permissions (Android 13+ requires asking at runtime)."""
+        """Ask for the notification permission (Android 13+ requires asking at runtime).
+
+        4.7.1: no photo permissions any more - the system photo picker (app/ui/image_picker.py)
+        gives access to the chosen picture without them.
+        """
         try:
             from android.permissions import Permission, request_permissions   # only exists on Android
             wanted = []
             # WRITE_EXTERNAL_STORAGE: saving the share card to the gallery on Android 7-9 (4.0.1)
-            for perm in ("POST_NOTIFICATIONS", "READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"):
+            for perm in ("POST_NOTIFICATIONS", "WRITE_EXTERNAL_STORAGE"):
                 if hasattr(Permission, perm):      # older python-for-android versions lack some
                     wanted.append(getattr(Permission, perm))
             request_permissions(wanted)

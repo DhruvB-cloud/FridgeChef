@@ -20,7 +20,8 @@ from kivy.uix.image import Image
 from kivy.uix.stacklayout import StackLayout
 
 from app.images import AVATARS, avatar_path
-from app.ui.widgets import (INK, MUTED, NEUTRAL, PRIMARY, PRIMARY_SOFT, SoftButton, SoftInput, SoftToggle,
+from app.validation import name_error                 # 4.7.1: the shared name rules
+from app.ui.widgets import (DANGER, INK, MUTED, NEUTRAL, PRIMARY, PRIMARY_SOFT, SoftButton, SoftInput, SoftToggle,
                             WrapLabel, light_popup, scroll_list, section_title)
 
 WELCOME_DONE = "welcome_done"           # settings key: "1" once the welcome popup was completed
@@ -83,12 +84,12 @@ def show_welcome(app, on_done=None):
     inner.add_widget(section_title("Pick your avatar", size=16))
     inner.add_widget(avatar_grid(picked["avatar"], lambda n: picked.update(avatar=n), group="welcome"))
 
-    inner.add_widget(section_title("Your name", size=16))
-    name_in = SoftInput(text=db.get_setting("user_name", "") or "", hint_text="Your name",
-                        size_hint_y=None, height=dp(46))
+    inner.add_widget(section_title("Your name (required)", size=16))
+    name_in = SoftInput(text=db.get_setting("user_name", "") or "", hint_text="Your name", rule="name",
+                        size_hint_y=None, height=dp(46))   # rule: max 126 characters, no symbols
     inner.add_widget(name_in)
 
-    inner.add_widget(section_title("Your cooking machines", size=16))
+    inner.add_widget(section_title("Cooking machines (at least 1)", size=16))
     inner.add_widget(WrapLabel(text="Recipes will only show dishes you can cook with these.",
                                color=MUTED, font_size=sp(13)))
     chips = StackLayout(size_hint_y=None, spacing=dp(8))   # chips flow onto new lines when needed
@@ -105,7 +106,18 @@ def show_welcome(app, on_done=None):
     # auto_dismiss=False: tapping outside does not close it - the user finishes with the button.
     popup = light_popup("Welcome to FridgeChef!", box, size_hint=(0.94, 0.9), auto_dismiss=False)
 
+    # Problems are shown just above the button (outside the scrolling part), so they are always visible.
+    error = WrapLabel(text="", color=DANGER, font_size=sp(14))
+    box.add_widget(error)
+
     def finish(*_):
+        # 4.7.1: a valid name and at least one machine are required (the avatar is always pre-selected).
+        problem = name_error(name_in.text, "name")
+        if problem is None and not any(t.state == "down" for t in toggles.values()):
+            problem = "Please pick at least one cooking machine."
+        if problem:
+            error.text = problem
+            return                                                    # stay open until it's fixed
         db.set_setting("user_avatar", picked["avatar"])               # save the avatar...
         db.set_setting("user_name", name_in.text.strip())             # ...the name...
         for appliance, t in toggles.items():                          # ...and every machine

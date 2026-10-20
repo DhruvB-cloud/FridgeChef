@@ -143,6 +143,7 @@ SORT_KEYS = {
     "Most carbs": lambda m: (m.recipe.carbs_g <= 0, -m.recipe.carbs_g),
     "Fewest calories": lambda m: (m.recipe.calories <= 0, m.recipe.calories),
     "Quickest": lambda m: m.recipe.prep_minutes,
+    "Longest first": lambda m: -m.recipe.prep_minutes,      # 4.7.1 default: most minutes first
 }
 
 

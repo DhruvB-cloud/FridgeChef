@@ -100,4 +100,5 @@ def share_image(path, text="Try this recipe!"):
         return True, "Card opened in your image viewer.\nSaved at: " + path
     except Exception as error:                           # never crash the app because sharing failed
         print(f"[FridgeChef] Sharing failed: {error!r}")   # also visible in Android's log (logcat)
-        return False, f"Sharing did not work: {error}\n\nThe card is saved at:\n{path}"
+        # 4.7.1: a friendly message for the user; the technical details are in the log line above.
+        return False, "Your phone could not open the share screen. Please try again in a moment."

@@ -52,7 +52,9 @@ UNLIMITED = 1_000_000.0                # "unlimited" litres - stored as a big nu
 DISH_WORDS = ("leftover", "cooked", "curry", "dal", "sabzi", "biryani", "pulao", "soup", "stew")
 
 # Ways the recipe list can be sorted (the "Sort" drop-down on the Recipes tab).
-SORT_OPTIONS = ["Best match", "Most protein", "Least carbs", "Most carbs", "Fewest calories", "Quickest"]
+# 4.7.1: "Longest first" (most preparation time first) is the default, as Dhruv decided.
+SORT_OPTIONS = ["Longest first", "Best match", "Most protein", "Least carbs", "Most carbs",
+                "Fewest calories", "Quickest"]
 
 
 def slugify(text):

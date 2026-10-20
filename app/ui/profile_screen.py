@@ -27,10 +27,11 @@ from app.images import avatar_path, resolve_image
 from app.meal_time import current_meal
 from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
 from app.ui.welcome_popup import show_avatar_picker
+from app.validation import name_error                 # 4.7.1: the shared name rules
 from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT, PRIMARY,
                             PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, Scene, SoftButton,
                             SoftInput, SoftToggle, TapBehavior, TapCard, WrapLabel, escape, icon_image, labeled,
-                            scroll_list, section_title)
+                            scroll_list, section_title, show_message, shrink_to_fit)
 
 
 class Circle(Widget):
@@ -86,7 +87,7 @@ class ProfileScreen(Screen):
         root.add_widget(body)
         self.add_widget(root)
         # Save the name 0.6 s after the user stops typing (instead of on every key).
-        self._save_name = Clock.create_trigger(lambda dt: self.app.db.set_setting("user_name", self.name_in.text.strip()), 0.6)
+        self._save_name = Clock.create_trigger(lambda dt: self._store_name(), 0.6)
 
     def on_pre_enter(self, *_):
         self.refresh()
@@ -114,7 +115,7 @@ class ProfileScreen(Screen):
         avatar.add_widget(face)
         avatar.bind(on_tap=lambda *_: show_avatar_picker(self.app, on_done=self.refresh))   # tap -> change it
         who.add_widget(avatar)
-        self.name_in = SoftInput(text=name, hint_text="Your name")
+        self.name_in = SoftInput(text=name, hint_text="Your name", rule="name")   # 4.7.1: max 126, no symbols
         self.name_in.bind(text=lambda *_: self._save_name())
         who.add_widget(labeled("Hello, chef!", self.name_in))
         c.add_widget(who)
@@ -122,14 +123,21 @@ class ProfileScreen(Screen):
         # ---------------------------------------------------------- streak card
         sc = Card(color=PEACH_SOFT, spacing=dp(10), padding=dp(16))
         top = BoxLayout(size_hint_y=None, height=dp(64), spacing=dp(12))
-        top.add_widget(icon_image("fire", dp(58)))
-        texts = BoxLayout(orientation="vertical")
-        texts.add_widget(Label(text=f"[b]{streak} day streak[/b]", markup=True, color=(0.72, 0.38, 0.22, 1),
-                               font_size=sp(26), halign="left", valign="bottom", text_size=(dp(240), None),
-                               size_hint_x=None, width=dp(240)))
-        texts.add_widget(Label(text=streak_message(streak, cooked_today), color=INK, font_size=sp(13),
-                               halign="left", valign="top", text_size=(dp(240), None),
-                               size_hint_x=None, width=dp(240)))
+        flame_icon = icon_image("fire", dp(58))
+        flame_icon.pos_hint = {"center_y": 0.5}
+        top.add_widget(flame_icon)
+        # 4.7.1: the texts use the card's real width (they had a fixed 240 dp and were cut off on the
+        # right). The message wraps onto more lines when needed and the row grows to fit.
+        texts = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2), pos_hint={"center_y": 0.5})
+        texts.bind(minimum_height=texts.setter("height"),
+                   height=lambda w, h: setattr(top, "height", max(dp(64), h)))   # row follows the texts
+        title = Label(text=f"[b]{streak} day streak[/b]", markup=True, color=(0.72, 0.38, 0.22, 1),
+                      font_size=sp(26), halign="left", valign="middle", shorten=True,
+                      size_hint_y=None, height=dp(34))
+        title.bind(size=lambda l, sz: setattr(l, "text_size", sz))   # fit inside, "..." if ever too long
+        shrink_to_fit(title, largest=26, smallest=16)        # narrow phones: smaller font, not "1 da...reak"
+        texts.add_widget(title)
+        texts.add_widget(WrapLabel(text=streak_message(streak, cooked_today), font_size=sp(13)))
         top.add_widget(texts)
         sc.add_widget(top)
         week = BoxLayout(size_hint_y=None, height=dp(62), spacing=dp(4))
@@ -149,7 +157,7 @@ class ProfileScreen(Screen):
         c.add_widget(sc)
 
         # ---------------------------------------------------------- stats row
-        stats = BoxLayout(size_hint_y=None, height=dp(104), spacing=dp(10))
+        stats = BoxLayout(size_hint_y=None, height=dp(114), spacing=dp(10))
         for icon_name, value, caption, bg in (("trophy", longest_streak(days), "best streak", (1, 0.96, 0.86, 1)),
                                               ("plate", len(log), "meals cooked", BLUE_SOFT),
                                               ("tab_calendar", len(days), "cooking days", PRIMARY_SOFT)):
@@ -157,7 +165,11 @@ class ProfileScreen(Screen):
             box.add_widget(centered(icon_image(icon_name, dp(30))))
             box.add_widget(Label(text=f"[b]{value}[/b]", markup=True, color=INK, font_size=sp(20),
                                  size_hint_y=None, height=dp(28)))
-            box.add_widget(Label(text=caption, color=MUTED, font_size=sp(12), size_hint_y=None, height=dp(18)))
+            # 4.7.1: the caption wraps to two centred lines on narrow phones instead of overlapping.
+            label = Label(text=caption, color=MUTED, font_size=sp(12), size_hint_y=None, height=dp(30),
+                          halign="center", valign="top")
+            label.bind(width=lambda l, w: setattr(l, "text_size", (w, None)))
+            box.add_widget(label)
             stats.add_widget(box)
         c.add_widget(stats)
 
@@ -172,11 +184,16 @@ class ProfileScreen(Screen):
             fav.add_widget(holder)
             text = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
             text.bind(minimum_height=text.setter("height"))
-            text.add_widget(WrapLabel(text=f"[b]{escape(fav_name)}[/b]", font_size=sp(17)))
+            # 4.7.1: at most two lines, then "..." (long names used to break mid-word in a thin column).
+            text.add_widget(WrapLabel(text=f"[b]{escape(fav_name)}[/b]", font_size=sp(17),
+                                      max_lines=2, shorten=True, shorten_from="right"))
             times = "once" if fav_count == 1 else f"{fav_count} times"
             text.add_widget(WrapLabel(text=f"Cooked {times}", color=MUTED, font_size=sp(14)))
+            text.pos_hint = {"center_y": 0.5}
             fav.add_widget(text)
-            fav.add_widget(centered(icon_image("star", dp(30))))
+            star = icon_image("star", dp(30))
+            star.pos_hint = {"center_y": 0.5}               # fixed 30 dp: the name gets all the other space
+            fav.add_widget(star)
             if entry["recipe_exists"]:
                 fav.bind(on_tap=lambda *_: self.app.open_recipe(entry["recipe_id"]))   # on_tap = real taps only, not swipes
             c.add_widget(fav)
@@ -210,7 +227,7 @@ class ProfileScreen(Screen):
             t = SoftToggle(appliance, state="down" if owned else "normal", size_hint=(None, None),
                            height=dp(40), width=dp(30 + 8 * len(appliance)))
             # Save immediately when tapped. 'n=appliance' freezes the name for this button.
-            t.bind(state=lambda btn, state, n=appliance: db.set_appliance(n, state == "down"))
+            t.bind(state=lambda btn, state, n=appliance: self._set_machine(btn, n, state == "down"))
             chips.add_widget(t)
         kitchen.add_widget(chips)
         c.add_widget(kitchen)
@@ -223,6 +240,22 @@ class ProfileScreen(Screen):
         c.add_widget(about)
 
     # ------------------------------------------------------------------ actions
+    def _store_name(self):
+        """Save the typed name - but only a valid one (4.7.1: a name is required, so an empty box
+        keeps the previous name instead of erasing it)."""
+        if name_error(self.name_in.text) is None:
+            self.app.db.set_setting("user_name", self.name_in.text.strip())
+
+    def _set_machine(self, button, name, owned):
+        """Tick / untick a cooking machine - at least one must stay ticked (4.7.1)."""
+        db = self.app.db
+        if not owned and db.owned_appliances() <= {name}:   # this is the last ticked machine
+            button.state = "down"                         # undo the tap...
+            show_message("Cooking machines", "Please keep at least one cooking machine - "
+                                             "recipes are chosen by the machines you have.", height=dp(250))
+            return
+        db.set_appliance(name, owned)
+
     def _set_servings(self, value):
         self.app.db.set_setting("default_servings", max(1, min(20, value)))
         self.refresh()

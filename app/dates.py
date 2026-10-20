@@ -31,6 +31,20 @@ def parse_date(text):
     raise ValueError(f"'{text}' is not a date like 25-10-2026")   # no pattern matched
 
 
+def short_minutes(minutes):
+    """A cooking time in a few characters (4.7.1 - prep times can now be up to 14,400 minutes):
+    45 -> '45 min', 90 -> '1 h 30', 120 -> '2 h', 14400 -> '10 d', 1500 -> '1 d 1 h'."""
+    minutes = int(minutes)
+    if minutes < 60:                                   # under an hour: plain minutes
+        return f"{minutes} min"
+    if minutes < 24 * 60:                              # under a day: hours (+ leftover minutes)
+        hours, mins = divmod(minutes, 60)              # divmod(90, 60) -> (1, 30)
+        return f"{hours} h {mins}" if mins else f"{hours} h"
+    days, rest = divmod(minutes, 24 * 60)              # a day or more: days (+ whole hours)
+    hours = rest // 60
+    return f"{days} d {hours} h" if hours else f"{days} d"
+
+
 def today():
     """Today's date (a separate function so tests could replace it)."""
     return date.today()                                # the computer's / phone's current date

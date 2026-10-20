@@ -55,6 +55,9 @@ def compatible(unit_a, unit_b):
     return to_base(1, unit_a)[1] == to_base(1, unit_b)[1]  # compare the two dimensions
 
 
+# 4.7.1 (Dhruv's rule): anything below 0.001 counts as 0 - e.g. 0.0004 kg left = used up.
+ZERO_BELOW = 0.001
+
 # Common fractions shown as one symbol for counted things ("9½ pcs" reads better than "9.5 pcs").
 FRACTION_SYMBOLS = {0.25: "¼", 0.5: "½", 0.75: "¾"}
 
@@ -67,6 +70,8 @@ def pretty_quantity(quantity, unit):
     decimal (a recipe may really use half an onion) - only the display changes.
     """
     quantity = float(quantity)                            # works for ints, floats and numeric text
+    if quantity < ZERO_BELOW:                             # 4.7.1: tiny leftovers show as 0
+        quantity = 0.0
     if quantity.is_integer():                             # whole numbers look nicer without ".0"
         return f"{int(quantity)} {unit}"
     if UNITS.get(unit, ("count", 1.0))[0] == "count":    # pieces / bunches: try a fraction symbol
@@ -74,6 +79,8 @@ def pretty_quantity(quantity, unit):
         part = round(quantity - whole, 2)                 # 9.5 -> 0.5
         if part in FRACTION_SYMBOLS:
             return f"{whole if whole else ''}{FRACTION_SYMBOLS[part]} {unit}"   # '9½' or just '½'
+    if round(quantity, 2) == 0:                           # e.g. 0.004 kg: two decimals would say "0"
+        return f"{round(quantity, 3):g} {unit}"
     return f"{round(quantity, 2):g} {unit}"               # otherwise at most two decimals
 
 

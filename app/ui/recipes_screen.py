@@ -37,7 +37,6 @@ from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RE
 
 # Drop-down label -> value understood by recipe_engine.filter_matches().
 DIET_OPTIONS = {"All diets": "All", "Veg only": "Veg", "Non-veg only": "Non-Veg"}
-TIME_OPTIONS = {"Any time": None, "Up to 15 min": 15, "Up to 30 min": 30, "Up to 60 min": 60}
 ANY_NUTRITION, ANY_CUISINE = "Any nutrition", "All cuisines"
 THUMB_WIDTH = dp(160)         # about this wide per thumbnail -> number of grid columns
 STRIP_THUMB = dp(148)         # width of a thumbnail in the Recommended strip
@@ -65,7 +64,7 @@ class RecipesScreen(Screen):
 
         # ---------- search + "Filters" button
         top = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
-        self.search = SoftInput(hint_text="Search recipes...")
+        self.search = SoftInput(hint_text="Search recipes...", rule="name")   # 4.7.1: max 126, no symbols
         self.search.bind(text=lambda *_: self.refresh_soon())
         self.filters_btn = SoftToggle("Filters", size_hint=(None, None), size=(dp(100), dp(46)))
         self.filters_btn.bind(state=lambda *_: self._toggle_filter_panel())
@@ -78,13 +77,12 @@ class RecipesScreen(Screen):
         grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None)
         grid.bind(minimum_height=grid.setter("height"))
         self.diet = SoftSpinner(text="All diets", values=list(DIET_OPTIONS))
-        self.time = SoftSpinner(text="Any time", values=list(TIME_OPTIONS))
         self.nutrition = SoftSpinner(text=ANY_NUTRITION, values=[ANY_NUTRITION] + NUTRITION_TAGS)
         self.cuisine = SoftSpinner(text=ANY_CUISINE, values=[ANY_CUISINE] + CUISINES)
         self.sort = SoftSpinner(text=SORT_OPTIONS[0], values=SORT_OPTIONS)   # protein / carbs sorting
         self.cook_now = SoftToggle("Cook-now only")       # pressed = hide recipes with gaps
-        for caption, widget in (("Diet", self.diet), ("Preparation time", self.time),
-                                ("Nutrition", self.nutrition), ("Cuisine", self.cuisine),
+        # 4.7.1: no "Preparation time" limit any more - recipes are listed longest first by default.
+        for caption, widget in (("Diet", self.diet), ("Nutrition", self.nutrition), ("Cuisine", self.cuisine),
                                 ("Sort by", self.sort), ("Show", self.cook_now)):
             grid.add_widget(labeled(caption, widget, height=dp(42)))
             # Any change -> ask the server again. Spinners fire 'text', the toggle fires 'state'.
@@ -116,7 +114,7 @@ class RecipesScreen(Screen):
         """The filter values in the form the engine / server expects."""
         return dict(
             diet=DIET_OPTIONS[self.diet.text],
-            max_minutes=TIME_OPTIONS[self.time.text],
+            max_minutes=None,                            # 4.7.1: the time limit filter was removed
             nutrition="Any" if self.nutrition.text == ANY_NUTRITION else self.nutrition.text,
             cuisine="Any" if self.cuisine.text == ANY_CUISINE else self.cuisine.text,
             search=self.search.text.strip(),
@@ -125,8 +123,8 @@ class RecipesScreen(Screen):
 
     def _active_filter_count(self):
         """How many filters differ from their default - shown on the Filters button."""
-        defaults = ("All diets", "Any time", ANY_NUTRITION, ANY_CUISINE, SORT_OPTIONS[0])
-        values = (self.diet.text, self.time.text, self.nutrition.text, self.cuisine.text, self.sort.text)
+        defaults = ("All diets", ANY_NUTRITION, ANY_CUISINE, SORT_OPTIONS[0])
+        values = (self.diet.text, self.nutrition.text, self.cuisine.text, self.sort.text)
         return sum(v != d for v, d in zip(values, defaults)) + (self.cook_now.state == "down")
 
     # ------------------------------------------------------------------ loading data

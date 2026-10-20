@@ -31,6 +31,7 @@ from datetime import date, datetime           # for expiry dates and timestamps
 
 from app.models import APPLIANCES, UNLIMITED, WATER_NAME, Ingredient, PantryItem, Recipe   # our data shapes
 from app.seed_recipes import SEED_RECIPES                            # the starter recipe library
+from app.units import ZERO_BELOW                                      # below this = used up (4.7.1)
 
 # SQL that creates every table if it does not exist yet. Running it on every start is safe.
 SCHEMA = """
@@ -236,7 +237,7 @@ class Database:
         because an empty pack should disappear from "Items in Fridge".
         """
         for item_id, new_quantity in changes:
-            if new_quantity <= 1e-9:                       # tiny tolerance for floating-point maths
+            if new_quantity < ZERO_BELOW:                  # 4.7.1: below 0.001 = used up -> remove it
                 self.conn.execute("DELETE FROM pantry_items WHERE id=?", (item_id,))
             else:
                 self.conn.execute("UPDATE pantry_items SET quantity=? WHERE id=?",

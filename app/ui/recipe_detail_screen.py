@@ -30,7 +30,8 @@ from app.recipe_engine import build_pantry_index, match_recipe, plan_deduction
 from app.share import share_image
 from app.ui.cooked_popup import show_cooked_popup   # the "Yay!" message after cooking
 from app.stats import current_streak
-from app.units import pretty_quantity
+from app.units import ZERO_BELOW, pretty_quantity
+from app.dates import short_minutes                  # "2 h 30" style cooking times (4.7.1)
 from app.ui.widgets import (BLUE, BLUE_SOFT, DANGER, DANGER_SOFT, HEX_AMBER, HEX_GREY, INK, MUTED,
                             NEUTRAL, PEACH_SOFT, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card,
                             Chip, ChipRow, Header, RoundImage, SoftButton, WrapLabel, colored,
@@ -112,7 +113,7 @@ class RecipeDetailScreen(Screen):
         match = match_recipe(recipe, build_pantry_index(db.list_pantry()), db.owned_appliances(), servings)
         scale = servings / recipe.servings                 # to show scaled ingredient amounts
         self.header.set_title(recipe.name)
-        self.header.set_subtitle(f"{recipe.cuisine} • {recipe.prep_minutes} min")
+        self.header.set_subtitle(f"{recipe.cuisine} • {short_minutes(recipe.prep_minutes)}")
         c = self.content
         c.clear_widgets()
 
@@ -123,7 +124,7 @@ class RecipeDetailScreen(Screen):
 
         # --- chips
         chips = [diet_chip(recipe.is_veg), Chip(recipe.cuisine, BLUE_SOFT, BLUE),
-                 Chip(f"{recipe.prep_minutes} min", NEUTRAL, INK)]
+                 Chip(short_minutes(recipe.prep_minutes), NEUTRAL, INK)]
         chips += [Chip(t, PEACH_SOFT, (0.70, 0.40, 0.28, 1)) for t in recipe.nutrition_tags]
         c.add_widget(ChipRow(chips))
 
@@ -250,7 +251,8 @@ class RecipeDetailScreen(Screen):
         try:
             create_recipe_card(self.recipe, path, image_file=resolve_image(self.recipe.picture))
         except Exception as error:
-            show_message("Could not create card", escape(str(error)))
+            print(f"[FridgeChef] Creating the share card failed: {error!r}")   # details for the developer log
+            show_message("Could not create card", "Sorry, the recipe card could not be made. Please try again.")
             return
         self._show_card_preview(path)                      # 4.0.1: show the card first, then share
 
@@ -266,7 +268,7 @@ class RecipeDetailScreen(Screen):
             if ok:
                 popup.dismiss()                            # the share sheet / viewer takes over
             else:
-                show_message("Sharing did not work", escape(message), height=dp(340))   # the real reason
+                show_message("Sharing did not work", escape(message), height=dp(300))   # friendly text (4.7.1)
         buttons.add_widget(SoftButton("Close", bg=NEUTRAL, fg=INK, on_release=lambda *_: popup.dismiss()))
         buttons.add_widget(SoftButton("Share", bg=BLUE, fg=WHITE, on_release=share))
         box.add_widget(buttons)
@@ -295,7 +297,7 @@ class RecipeDetailScreen(Screen):
         lines = []
         for item_id, new_qty in changes:
             item = by_id[item_id]
-            after = "used up" if new_qty <= 1e-9 else pretty_quantity(new_qty, item.unit)
+            after = "used up" if new_qty < ZERO_BELOW else pretty_quantity(new_qty, item.unit)   # 4.7.1
             lines.append(f"• {escape(item.name)}: {pretty_quantity(item.quantity, item.unit)} -> {after}")
         for w in warnings:
             lines.append(colored(w, HEX_AMBER))
@@ -353,8 +355,8 @@ class RecipeDetailScreen(Screen):
         """The user chose a photo: copy a resized version into the app folder and use it."""
         try:
             new_path = import_image(path, self.app.images_dir)
-        except Exception as error:                         # not an image, or unreadable
-            show_message("Photo problem", f"Could not use this file:\n{escape(error)}")
+        except Exception as error:                         # 4.7.1: PhotoError text is already friendly
+            show_message("Photo problem", escape(str(error)))
             return
         self._set_photo(new_path)
 
