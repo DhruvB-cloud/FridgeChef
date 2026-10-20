@@ -56,6 +56,11 @@ class Circle(Widget):
 class TapCircle(TapBehavior, Circle):
     """The Profile avatar: a Circle you can tap (opens the avatar picker, version 4.7.1)."""
 
+    def __init__(self, color, ring=None, **kwargs):
+        # Kivy's ButtonBehavior (inside TapBehavior) runs first and only accepts NAMED values, so the
+        # colour must be passed as color=... - passing it plainly crashed the Profile tab (4.7.1 bug).
+        super().__init__(color=color, ring=ring, **kwargs)
+
 
 def centered(widget):
     """Wrap a fixed-size widget so it sits in the middle of its column."""
