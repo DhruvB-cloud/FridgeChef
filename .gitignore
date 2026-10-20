@@ -15,3 +15,5 @@ server/data/
 .idea/
 # Word / Excel lock files while a document is open
 ~$*
+local_data/
+# ^ the app's database and photos when run on a PC (4.7.1 - kept on F:, never C:)

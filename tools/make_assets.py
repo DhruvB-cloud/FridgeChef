@@ -138,11 +138,60 @@ def make_app_icon(out_path, size=512):
     icon.save(out_path, "PNG")
 
 
+def blank_calendar(icon):
+    """Paint over the "July" and "17" on the Noto calendar and draw a small grid of days instead.
+
+    (Version 4.7.1: Dhruv asked for no specific date on the Calendar icon.) The positions are
+    fractions of the icon size, measured on the Noto picture, so this works at any size.
+    """
+    from PIL import ImageDraw                      # Pillow's simple shape-drawing tool
+    w, h = icon.size
+    draw = ImageDraw.Draw(icon)
+    red = icon.getpixel((w // 2, int(h * 0.08)))   # the header's red, taken from the picture itself
+    page = icon.getpixel((w // 2, int(h * 0.42)))  # the page's off-white, just under the header
+    draw.rectangle((w * 0.25, h * 0.11, w * 0.72, h * 0.37), fill=red)    # hide "July"
+    draw.rectangle((w * 0.20, h * 0.44, w * 0.80, h * 0.88), fill=page)   # hide "17"
+    cols, rows = 4, 3                              # a 4 x 3 grid of little day squares
+    left, top, right, bottom = w * 0.22, h * 0.48, w * 0.78, h * 0.85     # the area they fill
+    cell_w, cell_h = (right - left) / cols, (bottom - top) / rows        # room for one day
+    gap = w * 0.035                                # space between the squares
+    for r in range(rows):
+        for c in range(cols):
+            x0, y0 = left + c * cell_w + gap / 2, top + r * cell_h + gap / 2   # top-left of this day
+            draw.rounded_rectangle((x0, y0, x0 + cell_w - gap, y0 + cell_h - gap),
+                                   radius=w * 0.02, fill=(208, 208, 208, 255))   # soft grey day
+    return icon
+
+
+# Version 4.7.1: the avatars a new user picks from (the names must match app.images.AVATARS).
+AVATAR_EMOJI = {
+    "chef": "\U0001F9D1‍\U0001F373",   # cook
+    "cat": "\U0001F431",                     # cat face
+    "panda": "\U0001F43C",                   # panda
+    "fox": "\U0001F98A",                     # fox
+    "bear": "\U0001F43B",                    # bear
+    "rabbit": "\U0001F430",                  # rabbit face
+    "robot": "\U0001F916",                   # robot
+    "cupcake": "\U0001F9C1",                 # cupcake
+}
+
+
+def make_avatars(size=256):
+    """Save every avatar as assets/avatars/<name>.png (Noto 2D, 256 x 256, transparent)."""
+    from app.images import AVATARS, AVATARS_DIR    # the app's list - so both always agree
+    assert set(AVATAR_EMOJI) == set(AVATARS), "AVATAR_EMOJI and app.images.AVATARS differ"
+    os.makedirs(AVATARS_DIR, exist_ok=True)        # create assets/avatars the first time
+    for name in AVATARS:
+        make_icon(name, AVATAR_EMOJI[name], os.path.join(AVATARS_DIR, f"{name}.png"), size=size)
+
+
 def make_icon(name, char, out_path, size=128):
     """One small square icon: the emoji `char`, centred (Noto 2D, see emoji_image)."""
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     glyph = emoji_image(char, int(size * 0.9))
     icon.alpha_composite(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2))   # centred
+    if name == "tab_calendar":                     # 4.7.1: no fixed date ("July 17") on the icon
+        icon = blank_calendar(icon)
     icon.save(out_path, "PNG")
     print("icon:", name)
 
@@ -323,6 +372,9 @@ def make_textures():
 if __name__ == "__main__":
     if sys.argv[1:] == ["containers"]:            # "make_assets.py containers" = only the fridge container pictures
         make_container_icons()
+        sys.exit()
+    if sys.argv[1:] == ["avatars"]:               # "make_assets.py avatars" = only the profile avatars
+        make_avatars()
         sys.exit()
     if sys.argv[1:] == ["textures"]:              # "make_assets.py textures" = only the wood + leather
         make_textures()

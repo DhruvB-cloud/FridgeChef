@@ -183,6 +183,7 @@ class RecipesScreen(Screen):
         f = snapshot["filters"]
         mine_filtered = filter_matches(mine, only_cookable=snapshot["only_cookable"], **f)
         results = sort_matches(results + mine_filtered, f["sort"])
+        results = [m for m in results if m.appliance_ok]   # 4.7.1: hide dishes needing a machine you lack
         recommended = recommend(recommended + filter_matches(mine, **f), meal)
         self.state = dict(meal=meal, recommended=recommended, results=results, online=True,
                           servings=snapshot["servings"])
@@ -198,7 +199,8 @@ class RecipesScreen(Screen):
         meal = current_meal(snapshot["now"])
         self.state = dict(meal=meal, online=False, servings=snapshot["servings"],
                           recommended=recommend(filter_matches(matches, **f), meal),
-                          results=filter_matches(matches, only_cookable=snapshot["only_cookable"], **f))
+                          results=[m for m in filter_matches(matches, only_cookable=snapshot["only_cookable"], **f)
+                                   if m.appliance_ok])   # 4.7.1: only dishes your machines can cook
         self._set_status("Offline", AMBER_SOFT, AMBER)
         self._render()
 

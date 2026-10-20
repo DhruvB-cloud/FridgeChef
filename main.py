@@ -98,9 +98,15 @@ class FridgeChefApp(App):
         Window.clearcolor = BG                     # background colour behind everything
         Window.softinput_mode = "below_target"     # Android: keyboard pushes the focused field up
 
-        # user_data_dir is a private, writable folder that Kivy picks per platform:
-        #   Windows: C:\Users\<you>\AppData\Roaming\fridgechef   Android: the app's internal storage
-        self.data_dir = self.user_data_dir
+        # Where the database, photos and share cards are kept:
+        #   Android: user_data_dir = the app's private internal storage (chosen by Kivy).
+        #   PC (4.7.1): the "local_data" folder inside this project. Kivy's own choice on Windows
+        #   is C:\Users\<you>\AppData\Roaming\fridgechef, but nothing may be written to C:.
+        if platform in ("android", "ios"):
+            self.data_dir = self.user_data_dir
+        else:
+            self.data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local_data")
+            os.makedirs(self.data_dir, exist_ok=True)   # create it on the first run
         self.images_dir = os.path.join(self.data_dir, "images")   # photos of user recipes
         self.cards_dir = os.path.join(self.data_dir, "cards")     # generated share cards
         os.makedirs(self.images_dir, exist_ok=True)
@@ -141,8 +147,17 @@ class FridgeChefApp(App):
             self._request_android_permissions()
         else:
             self._ensure_local_server()            # PC: start server/app.py if nobody else did
+        Clock.schedule_once(lambda dt: self._maybe_welcome(), 0.5)  # 4.7.1: first start -> Welcome popup
         Clock.schedule_once(lambda dt: self.check_expiry(), 2)      # check 2 s after start-up
         Clock.schedule_interval(lambda dt: self.check_expiry(), 3600)   # and every hour after
+
+    def _maybe_welcome(self):
+        """Show the Welcome popup (avatar, name, cooking machines) until it was completed once."""
+        from app.ui.welcome_popup import needs_welcome, show_welcome   # only needed here
+        if needs_welcome(self.db):
+            # Afterwards reload the visible tab, so Recipes uses the machines just chosen.
+            screen = self.sm.current_screen
+            show_welcome(self, on_done=lambda: screen.refresh() if hasattr(screen, "refresh") else None)
 
     def on_stop(self):
         """Runs when the app closes - close the database cleanly (and our local server, if we started it)."""

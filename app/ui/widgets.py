@@ -20,7 +20,8 @@ from kivy.clock import Clock                            # run something on the n
 from kivy.loader import Loader                          # loads pictures on background threads
 from kivy.utils import platform                         # 'android', 'win', ... (keyboard fix below)
 from kivy.core.text import LabelBase                    # register the app's own fonts
-from kivy.graphics import Color, Line, Rectangle, RoundedRectangle   # low-level drawing instructions
+from kivy.graphics import (ClearBuffers, ClearColor, Color, Fbo, Line, Rectangle,   # low-level drawing instructions
+                           RoundedRectangle)                                    # (Fbo = off-screen canvas, for cropping)
 from kivy.graphics.texture import Texture               # home-made gradient pictures
 from kivy.uix.floatlayout import FloatLayout            # layers: photo, shade, name, badges
 from kivy.metrics import dp, sp           # dp = density-independent pixels, sp = scaled font size
@@ -555,6 +556,7 @@ class RoundImage(Widget):
         threads and hands the finished picture over a few per frame, so scrolling stays smooth.)
         """
         self._texture = None
+        self._crop_key = None                              # new picture -> crop it afresh in _update
         self._source = source                              # remember which picture we want now
         if source and os.path.exists(source):
             proxy = Loader.image(source)                   # starts loading (or returns it from the cache)
@@ -582,11 +584,32 @@ class RoundImage(Widget):
         box_ratio = self.width / self.height
         if tw / th > box_ratio:                         # picture is wider than the box: crop sides
             crop_w = int(th * box_ratio)
-            region = tex.get_region((tw - crop_w) // 2, 0, crop_w, th)
+            crop = ((tw - crop_w) // 2, 0, crop_w, th)
         else:                                           # picture is taller: crop top and bottom
             crop_h = int(tw / box_ratio)
-            region = tex.get_region(0, (th - crop_h) // 2, tw, crop_h)
-        self._rect.texture = region
+            crop = (0, (th - crop_h) // 2, tw, crop_h)
+        key = (id(tex), crop)                           # which picture + which part of it
+        if key != getattr(self, "_crop_key", None):     # only re-crop when picture or shape changed
+            self._crop_key = key                        #   (not when scrolling just moves the widget)
+            self._rect.texture = cropped_texture(tex, *crop)
+
+    # Version 4.7.1 fix: Kivy's RoundedRectangle ignores the "region" part of a texture and always
+    # stretches the WHOLE picture into its shape - so a square photo in the wide box on the recipe
+    # page looked squashed. Copying just the cropped part into its own texture avoids that.
+
+
+def cropped_texture(tex, x, y, w, h):
+    """Return a NEW texture holding only the part (x, y, w, h) of `tex`, the right way up."""
+    fbo = Fbo(size=(w, h))                              # an off-screen canvas exactly the crop's size
+    with fbo:
+        ClearColor(0, 0, 0, 0)                          # start fully transparent...
+        ClearBuffers()                                  # ...by wiping the canvas
+        Color(1, 1, 1, 1)                               # white tint = true colours
+        # Drawn with a negative height (pos at the top): an Fbo stores its picture upside down,
+        # so this flip makes the final texture come out upright.
+        Rectangle(pos=(0, h), size=(w, -h), texture=tex.get_region(x, y, w, h))
+    fbo.draw()                                          # render once, right now
+    return fbo.texture                                  # the finished, cropped picture
 
 
 class Header(BoxLayout):

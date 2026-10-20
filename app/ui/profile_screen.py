@@ -3,7 +3,7 @@ profile_screen.py
 -----------------
 WHY THIS FILE EXISTS:
     The "Profile" (user info) tab. It shows:
-      * your name and avatar,
+      * your name and avatar (tap the avatar to choose another one - version 4.7.1),
       * a Duolingo-style cooking STREAK (days in a row you cooked) with this week's 7 circles,
       * your longest streak, total meals cooked and your FAVOURITE DISH (most cooked),
       * settings: how many people you usually cook for (default 1), which cooking machines you own
@@ -16,18 +16,20 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Ellipse, Line
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.image import Image                    # the avatar picture (4.7.1)
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.widget import Widget
 
 from app import APP_VERSION
-from app.images import resolve_image
+from app.images import avatar_path, resolve_image
 from app.meal_time import current_meal
 from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
+from app.ui.welcome_popup import show_avatar_picker
 from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT, PRIMARY,
                             PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, Scene, SoftButton,
-                            SoftInput, SoftToggle, TapCard, WrapLabel, escape, icon_image, labeled,
+                            SoftInput, SoftToggle, TapBehavior, TapCard, WrapLabel, escape, icon_image, labeled,
                             scroll_list, section_title)
 
 
@@ -49,6 +51,10 @@ class Circle(Widget):
         self._disc.pos, self._disc.size = self.pos, self.size
         if self._has_ring:
             self._ring.ellipse = (self.x - dp(3), self.y - dp(3), self.width + dp(6), self.height + dp(6))
+
+
+class TapCircle(TapBehavior, Circle):
+    """The Profile avatar: a Circle you can tap (opens the avatar picker, version 4.7.1)."""
 
 
 def centered(widget):
@@ -91,12 +97,17 @@ class ProfileScreen(Screen):
         # ---------------------------------------------------------- avatar + name
         who = Card(orientation="horizontal", spacing=dp(14), padding=dp(14))
         name = db.get_setting("user_name", "") or ""
-        avatar = Circle(PRIMARY_SOFT, size_hint=(None, None), size=(dp(64), dp(64)))
-        initial = Label(text=f"[b]{escape((name or 'Chef')[:1].upper())}[/b]", markup=True,
-                        color=PRIMARY_DARK, font_size=sp(28))
-        avatar.bind(pos=lambda w, p: setattr(initial, "center", w.center),
-                    size=lambda w, s: setattr(initial, "center", w.center))
-        avatar.add_widget(initial)
+        avatar = TapCircle(PRIMARY_SOFT, size_hint=(None, None), size=(dp(64), dp(64)))
+        picture = avatar_path(db.get_setting("user_avatar"))   # 4.7.1: the avatar chosen at welcome
+        if picture:                                            # a cartoon avatar inside the circle
+            face = Image(source=picture, fit_mode="contain", size_hint=(None, None), size=(dp(48), dp(48)))
+        else:                                                  # none chosen: the name's first letter
+            face = Label(text=f"[b]{escape((name or 'Chef')[:1].upper())}[/b]", markup=True,
+                         color=PRIMARY_DARK, font_size=sp(28))
+        avatar.bind(pos=lambda w, p: setattr(face, "center", w.center),
+                    size=lambda w, s: setattr(face, "center", w.center))
+        avatar.add_widget(face)
+        avatar.bind(on_tap=lambda *_: show_avatar_picker(self.app, on_done=self.refresh))   # tap -> change it
         who.add_widget(avatar)
         self.name_in = SoftInput(text=name, hint_text="Your name")
         self.name_in.bind(text=lambda *_: self._save_name())

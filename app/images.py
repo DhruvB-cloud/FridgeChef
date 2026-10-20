@@ -22,6 +22,16 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(PROJECT_DIR, "assets")                 # bundled with the app
 RECIPE_IMAGES_DIR = os.path.join(ASSETS_DIR, "recipe_images")   # default recipe pictures
 ICONS_DIR = os.path.join(ASSETS_DIR, "icons")                   # tab / profile icons
+AVATARS_DIR = os.path.join(ASSETS_DIR, "avatars")               # profile pictures to choose from (4.7.1)
+# The avatars a user can pick (file assets/avatars/<name>.png, made by tools/make_assets.py avatars).
+AVATARS = ("chef", "cat", "panda", "fox", "bear", "rabbit", "robot", "cupcake")
+
+
+def avatar_path(name):
+    """File of the avatar called `name`, or None (no avatar chosen yet, or the file is missing)."""
+    path = os.path.join(AVATARS_DIR, f"{name}.png") if name in AVATARS else None   # only known names
+    return path if path and os.path.exists(path) else None
+
 
 # Set by the app at start-up: where downloaded server images are kept.
 _cache_dir = None
