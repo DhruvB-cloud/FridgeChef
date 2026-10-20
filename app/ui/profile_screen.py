@@ -26,9 +26,10 @@ from app import APP_VERSION
 from app.images import avatar_path, resolve_image
 from app.meal_time import current_meal
 from app.stats import current_streak, favourite_dish, longest_streak, streak_message, week_strip
+from app.ui.calendar_screen import CalendarPanel     # 5.0: the calendar is part of the Profile tab
 from app.ui.welcome_popup import show_avatar_picker
 from app.validation import name_error                 # 4.7.1: the shared name rules
-from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT, PRIMARY,
+from app.ui.widgets import (BLUE_SOFT, INK, MUTED, NEUTRAL, PEACH, PEACH_SOFT,
                             PRIMARY_DARK, PRIMARY_SOFT, WHITE, Card, Header, RoundImage, Scene, SoftButton,
                             SoftInput, SoftToggle, TapBehavior, TapCard, WrapLabel, escape, icon_image, labeled,
                             scroll_list, section_title, show_message, shrink_to_fit)
@@ -88,6 +89,8 @@ class ProfileScreen(Screen):
         self.add_widget(root)
         # Save the name 0.6 s after the user stops typing (instead of on every key).
         self._save_name = Clock.create_trigger(lambda dt: self._store_name(), 0.6)
+        # 5.0: the cooking calendar lives on this tab now (it keeps the month you are looking at).
+        self.calendar = CalendarPanel(app)
 
     def on_pre_enter(self, *_):
         self.refresh()
@@ -172,6 +175,11 @@ class ProfileScreen(Screen):
             box.add_widget(label)
             stats.add_widget(box)
         c.add_widget(stats)
+
+        # ---------------------------------------------------------- cooking calendar (5.0)
+        c.add_widget(section_title("Cooking calendar"))
+        self.calendar.refresh()
+        c.add_widget(self.calendar)
 
         # ---------------------------------------------------------- favourite dish
         fav_name, fav_count = favourite_dish(log)

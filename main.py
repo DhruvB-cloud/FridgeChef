@@ -44,8 +44,6 @@ from app import images
 from app.database import Database
 from app.expiry import notify_if_needed
 from app.ui.add_recipe_screen import AddRecipeScreen
-from app.ui.calendar_screen import CalendarScreen
-from app.ui.cookbook_screen import CookbookScreen
 from app.ui.pantry_screen import PantryScreen
 from app.ui.profile_screen import ProfileScreen
 from app.ui.recipe_detail_screen import RecipeDetailScreen
@@ -56,8 +54,8 @@ from app.ui.widgets import (BG, GRAD_PRIMARY, WHITE, bg_rect, icon_image, set_bg
 NAV_BAR = (0.09, 0.15, 0.13, 0.97)                # deep green-black floating tab bar (version 4.3)
 
 # The tabs of the bottom bar: (screen name, label, icon file in assets/icons).
+# 5.0: three tabs - Cookbook merged into Recipes (All / Saved / Mine), Calendar moved into Profile.
 TABS = [("pantry", "Fridge", "tab_fridge"), ("recipes", "Recipes", "tab_recipes"),
-        ("cookbook", "Cookbook", "tab_cookbook"), ("calendar", "Calendar", "tab_calendar"),
         ("profile", "Profile", "tab_profile")]
 TAB_NAMES = {name for name, _, _ in TABS}          # used to tell tabs apart from sub-screens
 
@@ -121,8 +119,6 @@ class FridgeChefApp(App):
         self.sm = ScreenManager(transition=NoTransition())
         self.sm.add_widget(PantryScreen(self, name="pantry"))
         self.sm.add_widget(RecipesScreen(self, name="recipes"))
-        self.sm.add_widget(CookbookScreen(self, name="cookbook"))
-        self.sm.add_widget(CalendarScreen(self, name="calendar"))
         self.sm.add_widget(ProfileScreen(self, name="profile"))
         self.sm.add_widget(RecipeDetailScreen(self, name="detail"))
         self.sm.add_widget(AddRecipeScreen(self, name="add_recipe"))

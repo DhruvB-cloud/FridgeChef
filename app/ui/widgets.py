@@ -24,7 +24,6 @@ from kivy.core.text.markup import MarkupLabel as CoreMarkupLabel   # measures te
 from kivy.graphics import (ClearBuffers, ClearColor, Color, Fbo, Line, Rectangle,   # low-level drawing instructions
                            RoundedRectangle)                                    # (Fbo = off-screen canvas, for cropping)
 from kivy.graphics.texture import Texture               # home-made gradient pictures
-from kivy.uix.floatlayout import FloatLayout            # layers: photo, shade, name, badges
 from kivy.metrics import dp, sp           # dp = density-independent pixels, sp = scaled font size
 from kivy.uix.behaviors import ButtonBehavior           # makes any widget clickable
 from kivy.uix.boxlayout import BoxLayout                # lays children out in a row or column
@@ -40,8 +39,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
-from app.images import ASSETS_DIR, resolve_image
-from app.dates import short_minutes                  # "2 h 30" on recipe cards (4.7.1)
+from app.images import ASSETS_DIR
 from app.validation import (INT_TYPING, NAME_MAX, QTY_TYPING, STEPS_MAX,   # typing rules (4.7.1)
                             clean_name_chars)
 
@@ -556,33 +554,6 @@ class TapCard(TapBehavior, Card):
     """A Card you can tap. Use bind(on_tap=...) - see TapBehavior for why not on_press."""
 
 
-class SideScroller(ScrollView):
-    """A sideways-scrolling strip that lets up/down swipes scroll the page around it.
-
-    Kivy's ScrollView keeps holding a vertical swipe that starts on a horizontal strip ("until the
-    timeout is done", says a comment in Kivy's own code), so the page looked stuck when your finger
-    happened to land on the Recommended strip. Here, as soon as a swipe is clearly more vertical
-    than horizontal, the strip lets go of it and the page scrolls instead (fixed in version 4.0.1).
-    """
-
-    def __init__(self, **kwargs):
-        kwargs.setdefault("do_scroll_y", False)         # this strip only moves sideways
-        kwargs.setdefault("bar_width", 0)               # no scroll bar
-        super().__init__(**kwargs)
-
-    def on_scroll_move(self, touch):
-        uid, avoid = self._get_uid(), self._get_uid("svavoid")
-        if avoid not in touch.ud and uid in touch.ud and touch.ud[uid]["mode"] == "unknown":
-            dx = abs(touch.x - touch.ox)                # how far the finger moved sideways...
-            dy = abs(touch.y - touch.oy)                # ...and up/down, since it went down
-            if dy > dp(8) and dy > dx:                  # clearly a vertical swipe:
-                touch.ud[avoid] = True                  #   tell Kivy this strip ignores the touch,
-                touch.ungrab(self)                      #   stop following it,
-                self._touch = None                      #   and cancel the pending "tap" timer
-                return False                            #   -> the page's ScrollView takes over
-        return super().on_scroll_move(touch)
-
-
 class RoundImage(Widget):
     """A picture with rounded corners, cropped to fill its box (like CSS 'object-fit: cover').
 
@@ -842,56 +813,6 @@ def nutrition_text(recipe):
     return " • ".join(parts)
 
 
-class RecipeTile(TapCard):
-    """Wide list row: rounded picture on the left, name + chips + status on the right."""
-
-    def __init__(self, match, on_open, **kwargs):
-        super().__init__(orientation="horizontal", spacing=dp(12), padding=dp(10), **kwargs)
-        recipe = match.recipe
-        picture = RoundImage(resolve_image(recipe.picture, small=True), radius=dp(16),
-                             size_hint=(None, None), size=(dp(88), dp(88)))
-        holder = BoxLayout(size_hint=(None, None), size=(dp(88), dp(88)),
-                           pos_hint={"center_y": 0.5})               # vertically centred in the row
-        holder.add_widget(picture)
-        self.add_widget(holder)
-        text_col = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
-        text_col.bind(minimum_height=text_col.setter("height"))
-        text_col.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(16)))
-        chips = [diet_chip(recipe.is_veg), Chip(short_minutes(recipe.prep_minutes), NEUTRAL, INK),
-                 Chip(recipe.cuisine, BLUE_SOFT, (0.30, 0.42, 0.62, 1))]
-        if recipe.protein_g:
-            chips.append(Chip(f"{recipe.protein_g:g}g protein", PEACH_SOFT, (0.70, 0.40, 0.28, 1)))
-        text_col.add_widget(ChipRow(chips))
-        for line in recipe_status_lines(match):
-            text_col.add_widget(WrapLabel(text=line, font_size=sp(13)))
-        self.add_widget(text_col)
-        self.bind(on_tap=lambda *_: on_open(recipe.id))       # tap -> open the recipe (real taps only, not swipes)
-
-
-class RecipeCard(TapCard):
-    """Compact vertical card (picture on top) - used in the Recommended strip and Cookbook grid."""
-
-    def __init__(self, match, on_open, width=None, **kwargs):
-        super().__init__(padding=dp(8), spacing=dp(4), **kwargs)
-        if width:                                        # fixed width inside horizontal strips
-            self.size_hint_x = None
-            self.width = width
-        recipe = match.recipe
-        self.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(14),
-                                   size_hint_y=None, height=dp(112)))
-        self.add_widget(WrapLabel(text=f"[b]{escape(recipe.name)}[/b]", font_size=sp(14),
-                                  max_lines=2, shorten=True, shorten_from="right"))
-        info = short_minutes(recipe.prep_minutes)
-        if recipe.protein_g:
-            info += f" • {recipe.protein_g:g}g protein"
-        self.add_widget(WrapLabel(text=info, font_size=sp(12), color=MUTED))
-        lines = recipe_status_lines(match)
-        if lines:                                        # only the most important status line
-            self.add_widget(WrapLabel(text=lines[0], font_size=sp(12), max_lines=2))
-        self.bind(on_tap=lambda *_: on_open(recipe.id))       # on_tap = real taps only, not swipes
-
-
-
 # ----------------------------------------------------------------------------------------------
 # KITCHEN SCENES (version 4.2) - one look for every tab
 # ----------------------------------------------------------------------------------------------
@@ -1003,55 +924,6 @@ class Pill(Label):
         self.bind(texture_size=lambda *_: setattr(self, "width", self.texture_size[0] + dp(14)))
 
 
-THUMB_RATIO = 1.22                   # thumbnails are a little taller than wide (portrait cards)
 STATUS_BADGE = {HEX_RED: (DANGER_SOFT, DANGER), HEX_AMBER: (AMBER_SOFT, (0.75, 0.48, 0.12, 1)),
                 HEX_GREEN: (PRIMARY_SOFT, PRIMARY_DARK), HEX_GREY: (NEUTRAL, INK)}
 
-
-class RecipeThumb(TapBehavior, FloatLayout):
-    """A recipe as a modern photo card: the picture fills the card, the name sits on a dark fade
-    at the bottom, and two floating badges show the status and the cooking time."""
-
-    def __init__(self, match, on_open, width=None, **kwargs):
-        super().__init__(size_hint_y=None, **kwargs)
-        if width:                                        # fixed width inside a sideways strip
-            self.size_hint_x = None
-            self.width = width
-        self.height = (width or dp(150)) * THUMB_RATIO
-        self.bind(width=lambda *_: setattr(self, "height", self.width * THUMB_RATIO))
-        bg_rect(self, (0, 0, 0, 0), radius=dp(20), shadow=True)   # only the soft shadow
-        recipe = match.recipe
-        self.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(20),
-                                   pos_hint={"x": 0, "y": 0}))
-        shade = Widget(size_hint=(1, 0.55), pos_hint={"x": 0, "y": 0})   # dark fade behind the name
-        with shade.canvas:
-            Color(1, 1, 1, 1)
-            fade = RoundedRectangle(radius=[1, 1, dp(20), dp(20)],      # 1, not 0 (see Scene)
-                                    texture=gradient_texture((0.05, 0.05, 0.05, 0), (0.05, 0.05, 0.05, 0.72)))
-        shade.bind(pos=lambda w, p: setattr(fade, "pos", p), size=lambda w, sz: setattr(fade, "size", sz))
-        self.add_widget(shade)
-        name = Label(text=recipe.name, bold=True, color=WHITE, font_size=sp(14),   # plain text, no markup
-                     size_hint=(1, 0.36), pos_hint={"x": 0, "y": 0.02}, halign="left", valign="bottom",
-                     max_lines=2, shorten=True, shorten_from="right", padding=(dp(11), dp(8)))
-        name.bind(size=lambda l, sz: setattr(l, "text_size", sz))   # wrap inside the card
-        self.add_widget(name)
-        text, hex_color = thumb_status(match)
-        bg, fg = STATUS_BADGE[hex_color]
-        self.status_pill = Pill(escape(text), bg, fg, pos_hint={"x": 0.06, "top": 0.95})
-        self.add_widget(self.status_pill)
-        self.time_pill = Pill(short_minutes(recipe.prep_minutes), (0.08, 0.08, 0.08, 0.5), WHITE,
-                              pos_hint={"right": 0.94, "top": 0.95})   # 4.7.1: "2 h 30" instead of "150 min"
-        self.add_widget(self.time_pill)
-        # 4.7.1: on narrow cards the two badges collided - then the time badge moves under the status one.
-        for w in (self, self.status_pill, self.time_pill):
-            w.bind(width=self._place_pills)
-        self.bind(on_tap=lambda *_: on_open(recipe.id))       # on_tap = real taps only, not swipes
-
-    def _place_pills(self, *_):
-        """Side by side when there is room, otherwise stacked on the left."""
-        room = self.width * 0.88                          # the space between the two 6 % margins
-        if self.status_pill.width + self.time_pill.width + dp(6) <= room:
-            self.time_pill.pos_hint = {"right": 0.94, "top": 0.95}            # top-right corner
-        else:
-            below = 0.95 - (self.status_pill.height + dp(4)) / max(self.height, 1)   # just under the first
-            self.time_pill.pos_hint = {"x": 0.06, "top": below}

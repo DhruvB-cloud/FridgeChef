@@ -195,7 +195,11 @@ class Version41Test(unittest.TestCase):
         self.assertEqual(guess_container("Leftover dal", "cup"), "dish")    # cooked food -> dish
         self.assertEqual(guess_container("Rice (cooked)", "g"), "dish")
         self.assertEqual(guess_container("Rice (uncooked)", "g"), "jar")    # "uncooked" is not "cooked"
-        self.assertEqual(guess_container("Onion", "pcs"), "jar")            # everything else -> jar
+        self.assertEqual(guess_container("Rice", "kg", "Grain"), "jar")     # dry food -> jar
+        self.assertEqual(guess_container("Yogurt", "kg", "Fresh produce"), "tub")    # 5.0: dairy
+        self.assertEqual(guess_container("Egg", "pcs", "Fresh produce"), "basket")
+        self.assertEqual(guess_container("Green onion", "pcs", "Fresh produce"), "greens")
+        self.assertEqual(guess_container("Tomato", "pcs", "Fresh produce"), "basket")
 
     def test_container_saved_and_old_files_upgraded(self):
         import sqlite3

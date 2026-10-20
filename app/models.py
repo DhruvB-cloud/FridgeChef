@@ -48,6 +48,12 @@ CONTAINER_PLACE = {"jar": "shelves", "tub": "shelves", "can": "shelves", "basket
 WATER_NAME = "Water"
 UNLIMITED = 1_000_000.0                # "unlimited" litres - stored as a big number in the database
 
+# 5.0: words for the fridge drawing (dairy in a tub, leafy things as greens).
+DAIRY_WORDS = {"yogurt", "curd", "dahi", "paneer", "cheese", "mozzarella", "parmesan", "butter",
+               "labneh", "cream"}
+LEAFY_WORDS = {"spinach", "lettuce", "cabbage", "coriander", "mint", "parsley", "basil", "dill",
+               "leaves", "broccoli", "green"}         # "green" catches green onion / green chili
+
 # Words that mean "cooked food", so the item is probably kept in a dish.
 DISH_WORDS = ("leftover", "cooked", "curry", "dal", "sabzi", "biryani", "pulao", "soup", "stew")
 
@@ -77,7 +83,13 @@ def guess_container(name, unit, tag=None):
         return "dish"
     if unit in ("ml", "l", "L"):                            # liquids
         return "carton" if "milk" in words else "bottle"
-    return {"Fresh produce": "greens", "Meat": "box", "Frozen": "box",
+    if set(words) & DAIRY_WORDS:                            # yogurt, paneer, cheese... -> a tub
+        return "tub"
+    if set(words) & {"egg", "eggs"}:                        # eggs: a basket on the shelves
+        return "basket"
+    if set(words) & LEAFY_WORDS:                            # spinach, coriander, lettuce... -> greens
+        return "greens"
+    return {"Fresh produce": "basket", "Meat": "box", "Frozen": "box",
             "Bakery": "basket"}.get(tag, "jar")
 
 

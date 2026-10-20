@@ -3,6 +3,8 @@ calendar_screen.py
 ------------------
 WHY THIS FILE EXISTS:
     "Give a calendar section where I can see what dish I cooked on which day."
+    Version 5.0: the Calendar is no longer a tab of its own - CalendarPanel is a section of the
+    Profile tab ("add calendar into the profile").
     A month grid (Mon-Sun). Days on which you cooked are tinted green and show how many dishes;
     today has a ring; the selected day is filled. Below the grid, the dishes of the selected day
     are listed (with pictures) - tap one to open the recipe. Arrows switch months.
@@ -15,24 +17,22 @@ import calendar                                  # Python's built-in calendar ma
 import os                                        # check that a photo file still exists
 from datetime import date, datetime
 
-from kivy.graphics import Color, Line, RoundedRectangle
+from kivy.graphics import Color, Line
 from kivy.metrics import dp, sp
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.relativelayout import RelativeLayout   # day tile: photo, dark layer and text on top of each other
-from kivy.uix.screenmanager import Screen
 from kivy.uix.widget import Widget
 
 from app.dates import format_date                # dd-mm-yyyy
 from app.images import resolve_image
 from app.ui.cooked_popup import attach_photo     # "Add photo" for a calendar entry
 from app.ui.widgets import (PEACH_SOFT, INK, MUTED, NEUTRAL, PRIMARY, PRIMARY_DARK, PRIMARY_SOFT, SURFACE, WHITE,
-                            Card, Header, RoundImage, Scene, SoftButton, TapCard, WrapLabel, bg_rect,
-                            escape, scroll_list, section_title)
+                            Card, RoundImage, SoftButton, TapCard, WrapLabel, bg_rect, escape)
 
-PAPER_CARD = (0.965, 0.972, 0.958, 1)            # light grey-green cards on the white calendar paper
+PAPER_CARD = WHITE                               # 5.0: white cards (the calendar now sits on the Profile tab)
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -82,37 +82,16 @@ class DayCell(ButtonBehavior, RelativeLayout):
                                         self.height - dp(2), dp(13))
 
 
-class CalendarScreen(Screen):
+class CalendarPanel(BoxLayout):
+    """The month grid + the dishes of the selected day, as one block for the Profile tab (5.0)."""
+
     def __init__(self, app, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(orientation="vertical", spacing=dp(12), size_hint_y=None, **kwargs)
+        self.bind(minimum_height=self.setter("height"))   # grow with the month + the day's dishes
         self.app = app
         today = date.today()
         self.year, self.month = today.year, today.month   # month being shown
         self.selected = today                             # day whose dishes are listed
-        root = BoxLayout(orientation="vertical")
-        self.header = Header("Cooking calendar", "", icon="tab_calendar")
-        root.add_widget(self.header)
-        # A paper wall calendar (the same scene frame as every other tab), hanging on two rings.
-        body = BoxLayout(padding=(dp(16), dp(4), dp(16), dp(8)))
-        self.scene = Scene("calendar")
-        with self.scene.canvas.after:
-            Color(0.42, 0.47, 0.44, 1)
-            self._rings = [RoundedRectangle(radius=[dp(4)]) for _ in range(2)]
-        self.scene.bind(pos=self._draw_rings, size=self._draw_rings)
-        scroll, self.content = scroll_list(spacing=dp(12), padding=(0, dp(10), 0, dp(10)))
-        self.scene.inner.add_widget(scroll)
-        body.add_widget(self.scene)
-        root.add_widget(body)
-        self.add_widget(root)
-
-    def _draw_rings(self, *_):
-        """Two dark binder rings across the top edge of the calendar."""
-        for ring, share in zip(self._rings, (0.3, 0.7)):
-            ring.pos = (self.scene.x + self.scene.width * share - dp(5), self.scene.top - dp(18))
-            ring.size = (dp(10), dp(26))
-
-    def on_pre_enter(self, *_):
-        self.refresh()
 
     def _shift_month(self, delta):
         """Go to the previous (-1) or next (+1) month."""
@@ -136,12 +115,11 @@ class CalendarScreen(Screen):
         days_cooked = len(per_day)
         meals = f"{len(month_log)} meal{'' if len(month_log) == 1 else 's'}"     # 1 meal / 2 meals
         days = f"{days_cooked} day{'' if days_cooked == 1 else 's'}"            # 1 day / 2 days
-        self.header.set_subtitle(f"{meals} on {days} this month")
 
-        c = self.content
+        c = self
         c.clear_widgets()
-        card = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)   # straight on the paper
-        card.bind(minimum_height=card.setter("height"))
+        card = Card(spacing=dp(10), padding=dp(12), radius=dp(24))   # the month, on a white card
+        card.add_widget(WrapLabel(text=f"[b]{meals} on {days}[/b] this month", color=MUTED, font_size=sp(13)))
         # --- month switcher:  <   October 2026   >
         nav = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
         nav.add_widget(SoftButton("<", size_hint=(None, None), size=(dp(44), dp(44)), bg=NEUTRAL,
@@ -178,7 +156,7 @@ class CalendarScreen(Screen):
             entries = db.cook_log(self.selected, self.selected)   # selected day is in another month
         weekday_and_date = f"{self.selected.strftime('%A')}, {format_date(self.selected)}"   # "Sunday, 04-10-2026"
         label = f"Today, {format_date(today)}" if self.selected == today else weekday_and_date
-        c.add_widget(self.scene.caption(label))
+        c.add_widget(WrapLabel(text=f"[b]{escape(label)}[/b]", color=PRIMARY_DARK, font_size=sp(14)))
         if not entries:
             empty = Card(color=PAPER_CARD, shadow=False)
             empty.add_widget(WrapLabel(text="Nothing cooked on this day.", color=MUTED, font_size=sp(14)))

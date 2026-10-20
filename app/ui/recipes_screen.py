@@ -2,43 +2,100 @@
 recipes_screen.py
 -----------------
 WHY THIS FILE EXISTS:
-    The "Recipes" tab. Every time it opens (and whenever a filter changes) it matches every recipe
-    on the phone against: what's in the fridge + which machines you own + your filters +
-    "cooking for 1 person", and shows the matches plus a "Recommended for <meal>" list.
+    The "Recipes" tab. Version 5.0 (testers wanted a simpler app) merged the old Recipes and
+    Cookbook tabs into ONE list:
+      * three chips at the top: All | Saved | Mine (your own recipes), plus a search box;
+      * every recipe is one row: its photo on the left, name, cooking time and cuisine on the
+        right, and one coloured badge (Ready to cook / Missing 2 / Use today / Needs Oven);
+      * no filter panel any more. "All" only shows dishes your cooking machines can make.
 
-    Version 4.7.1: there is no recipe server any more. Once a day app/catalog.py downloads the
-    published recipe catalogue (a plain file on GitHub Pages) and saves new / changed recipes in
-    the local database; the status chip shows "Up to date" after a successful check, else
-    "Offline" (the saved recipes keep working either way).
-
-    Layout (version 4.2): the tab is the KITCHEN. Recipes are thumbnails lying on an oak-wood
-    counter - "Recommended for <meal>" as a sideways strip, then all recipes as a grid
-    (2 columns on a phone, more on wider screens). The counter stays put; the thumbnails scroll.
+    All matching happens on the phone (app/recipe_engine.py). Once a day app/catalog.py downloads
+    the published recipe catalogue and saves new / changed recipes; the status chip shows
+    "Up to date" after a successful check, else "Offline" (the saved recipes keep working).
 """
-
-from datetime import date, datetime
 
 from kivy.clock import Clock
 from kivy.metrics import dp, sp
+from kivy.uix.behaviors import ToggleButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
-from kivy.uix.scrollview import ScrollView
+from kivy.uix.widget import Widget
 
 from app.catalog import apply_catalog, sync_if_due
+from app.dates import short_minutes
 from app.expiry import expiring_today
-from app.meal_time import current_meal
-from app.models import CUISINES, NUTRITION_TAGS, SORT_OPTIONS
-from app.recipe_engine import filter_matches, match_all, recommend
-from app.ui.widgets import (SideScroller, AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, MUTED, NEUTRAL, PRIMARY_DARK,
-                            PRIMARY_SOFT, THUMB_RATIO, Card, Chip, Header, RecipeThumb, Scene, SoftInput,
-                            SoftSpinner, SoftToggle, WrapLabel, colored, labeled, scroll_list)
+from app.images import resolve_image
+from app.models import SORT_OPTIONS
+from app.recipe_engine import filter_matches, match_all
+from app.ui.widgets import (AMBER, AMBER_SOFT, DANGER_SOFT, HEX_RED, INK, MUTED, NEUTRAL,
+                            PRIMARY_DARK, PRIMARY_SOFT, STATUS_BADGE, WHITE, Card, Chip, Header, Pill,
+                            RoundImage, SoftButton, SoftInput, TapCard, WrapLabel, bg_rect, colored,
+                            scroll_list, thumb_status)
 
-# Drop-down label -> value understood by recipe_engine.filter_matches().
-DIET_OPTIONS = {"All diets": "All", "Veg only": "Veg", "Non-veg only": "Non-Veg"}
-ANY_NUTRITION, ANY_CUISINE = "Any nutrition", "All cuisines"
-THUMB_WIDTH = dp(160)         # about this wide per thumbnail -> number of grid columns
-STRIP_THUMB = dp(148)         # width of a thumbnail in the Recommended strip
+# The three views of the list: (key, label, colour of the chip when selected).
+VIEWS = [("all", "All", (0.98, 0.55, 0.24, 1)),       # warm orange
+         ("saved", "Saved", (0.91, 0.36, 0.48, 1)),   # raspberry
+         ("mine", "Mine", (0.36, 0.45, 0.90, 1))]     # indigo
+ROW_HEIGHT = dp(104)
+# A colour per cuisine (hex text for Kivy markup) - small touches of colour that blend with the badges.
+CUISINE_COLORS = {"Indian": "e0782f", "Arabic": "b0862a", "English": "4a72c4", "Italian": "3f9b5d",
+                  "Asian": "d1495b", "Mexican": "8e5bc9"}
+SAVED_PILL = ((1, 0.90, 0.93, 1), (0.85, 0.27, 0.42, 1))   # soft pink badge, raspberry text
+
+
+class ViewChip(ToggleButtonBehavior, Label):
+    """One of the All / Saved / Mine chips: white when off, filled with its colour when on."""
+
+    def __init__(self, key, text, color, **kwargs):
+        super().__init__(text=text, bold=True, font_size=sp(14), size_hint=(None, None),
+                         height=dp(38), group="recipe_views", allow_no_selection=False, **kwargs)
+        self.key, self.label_text, self.on_color = key, text, color
+        bg_rect(self, WHITE, radius=dp(19))                # sets self._bg_color (see widgets.bg_rect)
+        self.bind(state=self._restyle,
+                  texture_size=lambda *_: setattr(self, "width", self.texture_size[0] + dp(30)))
+        self._restyle()
+
+    def set_count(self, count):
+        self.text = f"{self.label_text}  {count}"           # e.g. "Saved  4"
+
+    def _restyle(self, *_):
+        on = self.state == "down"
+        self._bg_color.rgba = self.on_color if on else WHITE   # filled when selected
+        self.color = WHITE if on else INK
+
+
+class RecipeRow(TapCard):
+    """One recipe in the list: photo on the left; name, time + cuisine and badges on the right."""
+
+    def __init__(self, match, on_open, **kwargs):
+        super().__init__(orientation="horizontal", padding=dp(10), spacing=dp(12), radius=dp(22), **kwargs)
+        recipe = match.recipe
+        holder = BoxLayout(size_hint=(None, None), size=(dp(84), dp(84)), pos_hint={"center_y": 0.5})
+        holder.add_widget(RoundImage(resolve_image(recipe.picture, small=True), radius=dp(18)))
+        self.add_widget(holder)
+
+        text = BoxLayout(orientation="vertical", spacing=dp(2), size_hint_y=None, height=dp(84),
+                         pos_hint={"center_y": 0.5})
+        name = Label(text=recipe.name, bold=True, color=INK, font_size=sp(16), halign="left",
+                     valign="top", max_lines=2, shorten=True, shorten_from="right")
+        name.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        text.add_widget(name)
+        cuisine_hex = CUISINE_COLORS.get(recipe.cuisine, "8a8f93")   # every cuisine has its own colour
+        meta = Label(text=f"{short_minutes(recipe.prep_minutes)}  •  [color={cuisine_hex}][b]{recipe.cuisine}[/b][/color]",
+                     markup=True, color=MUTED, font_size=sp(13), halign="left", valign="middle",
+                     size_hint_y=None, height=dp(20))
+        meta.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        text.add_widget(meta)
+        badges = BoxLayout(size_hint_y=None, height=dp(24), spacing=dp(6))
+        status, hex_color = thumb_status(match)
+        badges.add_widget(Pill(status, *STATUS_BADGE[hex_color], font_size=sp(11.5)))
+        if recipe.is_saved:                                # a pink badge for saved dishes
+            badges.add_widget(Pill("Saved", *SAVED_PILL, font_size=sp(11.5)))
+        badges.add_widget(Widget())                        # keeps the badges on the left
+        text.add_widget(badges)
+        self.add_widget(text)
+        self.bind(on_tap=lambda *_: on_open(recipe.id))     # real taps only, never swipes (4.7.1)
 
 
 class RecipesScreen(Screen):
@@ -47,98 +104,54 @@ class RecipesScreen(Screen):
     def __init__(self, app, **kwargs):
         super().__init__(**kwargs)
         self.app = app
-        self.state = None                # last results: dict(meal, recommended, results, servings)
-        self.cols = None                 # thumbnails per grid row (None = not decided yet)
-        # A "trigger" runs refresh() once, 0.35 s after the LAST call - so typing "paneer" sends
-        # one request instead of six.
+        self.view = "all"                # which chip is selected
+        self.state = None                # last results, see _apply_local
+        # A "trigger" runs refresh() once, 0.35 s after the LAST call - so typing "paneer" refreshes
+        # once instead of six times.
         self.refresh_soon = Clock.create_trigger(lambda dt: self.refresh(), 0.35)
 
         root = BoxLayout(orientation="vertical")
-        self.header = Header("What's cooking?", "Finding recipes for your fridge...", icon="tab_recipes")
+        self.header = Header("Recipes", "Finding recipes for your fridge...", icon="tab_recipes")
         self.status_chip = Chip("...", NEUTRAL, MUTED)
-        self.header.set_right(self.status_chip, dp(78))
+        self.header.set_right(self.status_chip, dp(92))
         root.add_widget(self.header)
-        self.body = BoxLayout(orientation="vertical", padding=(dp(16), 0, dp(16), dp(6)), spacing=dp(10))
+        body = BoxLayout(orientation="vertical", padding=(dp(16), 0, dp(16), dp(6)), spacing=dp(10))
 
-        # ---------- search + "Filters" button
-        top = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
-        self.search = SoftInput(hint_text="Search recipes...", rule="name")   # 4.7.1: max 126, no symbols
+        self.search = SoftInput(hint_text="Search 100+ recipes...", rule="name", height=dp(48))
         self.search.bind(text=lambda *_: self.refresh_soon())
-        self.filters_btn = SoftToggle("Filters", size_hint=(None, None), size=(dp(100), dp(46)))
-        self.filters_btn.bind(state=lambda *_: self._toggle_filter_panel())
-        top.add_widget(self.search)
-        top.add_widget(self.filters_btn)
-        self.body.add_widget(top)
+        body.add_widget(self.search)
 
-        # ---------- the (hidden by default) filter panel
-        self.filter_panel = Card(shadow=False, padding=dp(12))
-        grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None)
-        grid.bind(minimum_height=grid.setter("height"))
-        self.diet = SoftSpinner(text="All diets", values=list(DIET_OPTIONS))
-        self.nutrition = SoftSpinner(text=ANY_NUTRITION, values=[ANY_NUTRITION] + NUTRITION_TAGS)
-        self.cuisine = SoftSpinner(text=ANY_CUISINE, values=[ANY_CUISINE] + CUISINES)
-        self.sort = SoftSpinner(text=SORT_OPTIONS[0], values=SORT_OPTIONS)   # protein / carbs sorting
-        self.cook_now = SoftToggle("Cook-now only")       # pressed = hide recipes with gaps
-        # 4.7.1: no "Preparation time" limit any more - recipes are listed longest first by default.
-        for caption, widget in (("Diet", self.diet), ("Nutrition", self.nutrition), ("Cuisine", self.cuisine),
-                                ("Sort by", self.sort), ("Show", self.cook_now)):
-            grid.add_widget(labeled(caption, widget, height=dp(42)))
-            # Any change -> ask the server again. Spinners fire 'text', the toggle fires 'state'.
-            widget.bind(**{"state" if widget is self.cook_now else "text": lambda *_: self.refresh_soon()})
-        self.filter_panel.add_widget(grid)
+        chips = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
+        self.chips = {}
+        for key, text, color in VIEWS:
+            chip = ViewChip(key, text, color, state="down" if key == self.view else "normal")
+            chip.bind(state=lambda c, state: self._pick_view(c.key) if state == "down" else None)
+            self.chips[key] = chip
+            chips.add_widget(chip)
+        chips.add_widget(Widget())                         # chips stay on the left
+        body.add_widget(chips)
 
-        # ---------- banner for items expiring today
-        self.banner = BoxLayout(orientation="vertical", size_hint_y=None, height=0)   # height=0: empty = no gap
+        self.banner = BoxLayout(orientation="vertical", size_hint_y=None, height=0)   # "Use today" note
         self.banner.bind(minimum_height=self.banner.setter("height"))
-        self.body.add_widget(self.banner)
+        body.add_widget(self.banner)
 
-        # ---------- results area: the oak kitchen counter (filled by _render)
-        self.scene = Scene("kitchen")
-        self.content = self.scene.inner
-        self.content.bind(size=self._maybe_relayout)
-        self.body.add_widget(self.scene)
-        root.add_widget(self.body)
+        self.scroll, self.list = scroll_list(spacing=dp(10), padding=(dp(2), dp(4), dp(2), dp(12)))
+        body.add_widget(self.scroll)
+        root.add_widget(body)
         self.add_widget(root)
-
-    # ------------------------------------------------------------------ filters
-    def _toggle_filter_panel(self):
-        """Show or hide the filter panel just below the search row."""
-        if self.filters_btn.state == "down" and self.filter_panel.parent is None:
-            self.body.add_widget(self.filter_panel, index=len(self.body.children) - 1)
-        elif self.filters_btn.state == "normal" and self.filter_panel.parent is not None:
-            self.body.remove_widget(self.filter_panel)
-
-    def current_filters(self):
-        """The filter values in the form the engine / server expects."""
-        return dict(
-            diet=DIET_OPTIONS[self.diet.text],
-            max_minutes=None,                            # 4.7.1: the time limit filter was removed
-            nutrition="Any" if self.nutrition.text == ANY_NUTRITION else self.nutrition.text,
-            cuisine="Any" if self.cuisine.text == ANY_CUISINE else self.cuisine.text,
-            search=self.search.text.strip(),
-            sort=self.sort.text,
-        )
-
-    def _active_filter_count(self):
-        """How many filters differ from their default - shown on the Filters button."""
-        defaults = ("All diets", ANY_NUTRITION, ANY_CUISINE, SORT_OPTIONS[0])
-        values = (self.diet.text, self.nutrition.text, self.cuisine.text, self.sort.text)
-        return sum(v != d for v, d in zip(values, defaults)) + (self.cook_now.state == "down")
 
     # ------------------------------------------------------------------ loading data
     def on_pre_enter(self, *_):
-        self.refresh()                                   # opening the tab = a new API request
+        self.refresh()
+
+    def _pick_view(self, key):
+        self.view = key
+        self.refresh()
 
     def refresh(self):
         """Match all saved recipes on the phone (instant) and, once a day, check for new recipes."""
         db = self.app.db
-        count = self._active_filter_count()
-        self.filters_btn.text = f"Filters ({count})" if count else "Filters"
         pantry = db.list_pantry()
-        snapshot = dict(pantry=pantry, appliances=db.owned_appliances(),
-                        servings=db.default_servings(), filters=self.current_filters(),
-                        only_cookable=self.cook_now.state == "down",
-                        today=date.today(), now=datetime.now())
         self._show_banner(pantry)
         # Once a day: look for new recipes in the background (see app/catalog.py).
         checking = sync_if_due(db, lambda update, ok: Clock.schedule_once(   # back to the UI thread
@@ -147,7 +160,7 @@ class RecipesScreen(Screen):
             self._set_status("Checking", NEUTRAL, MUTED)
         elif self.status_chip.text == "...":             # today's check already succeeded earlier
             self._set_status("Up to date", PRIMARY_SOFT, PRIMARY_DARK)
-        self._apply_local(snapshot)                      # results appear immediately
+        self._apply_local(pantry)
 
     def _catalog_checked(self, update, ok):
         """The daily catalogue check finished (runs on the UI thread)."""
@@ -159,17 +172,24 @@ class RecipesScreen(Screen):
         if update and self.app.sm.current == "recipes":  # new recipes arrived -> show them
             self.refresh()
 
-    def _apply_local(self, snapshot):
-        """Match every saved recipe (catalogue + your own) on this phone."""
+    def _apply_local(self, pantry):
+        """Match every saved recipe (catalogue + your own) on this phone, then draw the list."""
         db = self.app.db
-        matches = match_all(db.list_recipes(), snapshot["pantry"], snapshot["appliances"],
-                            servings=snapshot["servings"])
-        f = snapshot["filters"]
-        meal = current_meal(snapshot["now"])
-        self.state = dict(meal=meal, servings=snapshot["servings"],
-                          recommended=recommend(filter_matches(matches, **f), meal),
-                          results=[m for m in filter_matches(matches, only_cookable=snapshot["only_cookable"], **f)
-                                   if m.appliance_ok])   # 4.7.1: only dishes your machines can cook
+        servings = db.default_servings()
+        matches = match_all(db.list_recipes(), pantry, db.owned_appliances(), servings=servings)
+        search = self.search.text.strip()
+        views = {
+            # All: dishes your machines can cook (your own recipes always show).
+            "all": [m for m in matches if m.appliance_ok or m.recipe.is_user],
+            "saved": [m for m in matches if m.recipe.is_saved],
+            "mine": [m for m in matches if m.recipe.is_user],
+        }
+        for key, chip in self.chips.items():
+            chip.set_count(len(views[key]))
+        results = filter_matches(views[self.view], search=search, sort=SORT_OPTIONS[0])   # longest first
+        ready = sum(m.can_cook for m in views["all"])
+        self.header.set_subtitle(f"{len(views['all'])} recipes  •  {ready} ready")   # short: fits small phones
+        self.state = dict(view=self.view, results=results, search=search)
         self._render()
 
     def _set_status(self, text, bg, fg):
@@ -181,70 +201,46 @@ class RecipesScreen(Screen):
         self.banner.clear_widgets()
         today_items = expiring_today(pantry)
         if today_items:
-            card = Card(color=DANGER_SOFT, shadow=False, padding=dp(10))
+            card = Card(color=DANGER_SOFT, shadow=False, padding=dp(10), radius=dp(16))
             card.add_widget(WrapLabel(
-                text=colored("Expiring today: " + ", ".join(i.name for i in today_items), HEX_RED, True),
-                font_size=sp(14)))
+                text=colored("Use today: " + ", ".join(i.name for i in today_items), HEX_RED, True)
+                + "  - dishes that use them are marked [b]Use today[/b].", font_size=sp(13)))
             self.banner.add_widget(card)
 
-    # ------------------------------------------------------------------ drawing results
-    def _maybe_relayout(self, *_):
-        """Re-draw when the window gets wide/narrow enough for a different number of columns."""
-        cols = max(2, int(self.content.width // THUMB_WIDTH))
-        if cols != self.cols:
-            self.cols = cols
-            self._render()
-
+    # ------------------------------------------------------------------ drawing
     @staticmethod
     def _fingerprint(matches):
-        """A short summary of a result list: changes only when something VISIBLE changes."""
-        return tuple((m.recipe.uid, m.recipe.picture, m.appliance_ok,
-                      tuple(i.name for i in m.missing), tuple(m.uses_expiring_today),
-                      tuple(m.uses_expiring_soon)) for m in matches)
+        """A short summary of the list: changes only when something VISIBLE changes."""
+        return tuple((m.recipe.uid, m.recipe.picture, m.recipe.is_saved, thumb_status(m)) for m in matches)
 
     def _render(self):
-        if self.state is None or self.cols is None:
-            return
         s = self.state
-        people = "1 person" if s["servings"] == 1 else f"{s['servings']} people"
-        self.header.set_subtitle(f"For {people} • {len(s['results'])} recipes")
-        # Version 4.0.1: rebuilding ~30 cards while you scroll interrupted the swipe and jumped back
-        # to the top. If the new answer looks exactly like what is on screen, keep the screen as it is.
-        shown = (self.cols, s["meal"], self._fingerprint(s["recommended"]), self._fingerprint(s["results"]))
+        # Rebuilding 100 rows while you scroll would interrupt the swipe and jump to the top, so the
+        # list is only rebuilt when what it shows has really changed (idea from version 4.0.1).
+        shown = (s["view"], self._fingerprint(s["results"]))
         if shown == getattr(self, "_shown", None):
             return
         self._shown = shown
-        old_scroll = [w.scroll_y for w in self.content.walk() if isinstance(w, ScrollView) and w.do_scroll_y]
-        self.content.clear_widgets()
-        open_recipe = self.app.open_recipe
-        caption = self.scene.caption                     # the shared caption style, in dark oak
-
-        scroll, inner = scroll_list(spacing=dp(8), padding=(0, 0, 0, dp(8)))
-        # ---- "Recommended for Lunch": a sideways strip of thumbnails
-        inner.add_widget(caption(f"Recommended for {s['meal']}"))
-        if s["recommended"]:
-            strip = SideScroller(size_hint_y=None, height=STRIP_THUMB * THUMB_RATIO + dp(16))   # up/down swipes scroll the page
-            row = BoxLayout(size_hint_x=None, spacing=dp(10), padding=(0, dp(2), 0, dp(6)))
-            row.bind(minimum_width=row.setter("width"))  # row grows sideways with its thumbnails
-            for m in s["recommended"]:
-                row.add_widget(RecipeThumb(m, on_open=open_recipe, width=STRIP_THUMB, pos_hint={"top": 1}))
-            strip.add_widget(row)
-            inner.add_widget(strip)
-        else:
-            inner.add_widget(self._note(f"No {s['meal'].lower()} dishes match your fridge yet."))
-        # ---- every recipe, as a grid of thumbnails
-        inner.add_widget(caption(f"All recipes ({len(s['results'])})"))
+        self.list.clear_widgets()
+        if s["view"] == "mine":                            # your own recipes: "+ New recipe" on top
+            self.list.add_widget(SoftButton("+  New recipe", height=dp(52),
+                                            on_release=lambda *_: self.app.open_add_recipe()))
         if not s["results"]:
-            inner.add_widget(self._note("No recipes match these filters."))
-        grid = GridLayout(cols=self.cols, spacing=dp(12), size_hint_y=None)
-        grid.bind(minimum_height=grid.setter("height"))
+            self.list.add_widget(self._empty_note(s))
         for m in s["results"]:
-            grid.add_widget(RecipeThumb(m, on_open=open_recipe))
-        inner.add_widget(grid)
-        self.content.add_widget(scroll)
-        if old_scroll:                                   # stay where you were (don't jump to the top)
-            Clock.schedule_once(lambda dt: setattr(scroll, "scroll_y", old_scroll[0]), 0)
+            self.list.add_widget(RecipeRow(m, on_open=self.app.open_recipe))
+        self.scroll.scroll_y = 1                           # a new list starts at the top
 
-    def _note(self, text):
-        """A short message written on the counter (e.g. 'No recipes match these filters.')."""
-        return WrapLabel(text=text, color=self.scene.theme["caption"], font_size=sp(14))
+    @staticmethod
+    def _empty_note(s):
+        if s["search"]:
+            text = f"No recipe matches \"{s['search']}\"."
+        elif s["view"] == "saved":
+            text = "Nothing saved yet. Open a recipe and tap [b]Save[/b] to keep it here."
+        elif s["view"] == "mine":
+            text = "You haven't added your own recipes yet. Tap [b]+ New recipe[/b]."
+        else:
+            text = "No recipes for your cooking machines. Tick more machines on the Profile tab."
+        card = Card(shadow=False, padding=dp(14), radius=dp(18))
+        card.add_widget(WrapLabel(text=text, color=MUTED, font_size=sp(14)))
+        return card
