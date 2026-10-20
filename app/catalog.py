@@ -24,6 +24,7 @@ import os
 import re                            # checks picture file names
 import ssl                           # HTTPS: checks the website's certificate
 import threading                     # download without freezing the screen
+import time                          # monotonic(): wait a while after a failed check
 import urllib.error
 import urllib.request                # Python's built-in HTTP client
 from datetime import date
@@ -37,6 +38,8 @@ MAX_IMAGE_BYTES = 2 * 1024 * 1024    # recipe pictures are ~150 KB
 SAFE_IMAGE_NAME = re.compile(r"[a-z0-9-]{1,80}\.jpg")   # e.g. "dal-tadka.jpg" - nothing like "../x"
 CHECKED_ON = "catalog_checked_on"    # settings key: the day of the last SUCCESSFUL check
 VERSION = "catalog_version"          # settings key: fingerprint of the catalogue we have
+RETRY_AFTER_SECONDS = 15 * 60        # after a failed check (e.g. offline), wait before trying again
+_state = {"running": False, "failed_at": None}   # one check at a time; when the last one failed
 
 
 def _ssl_context():
@@ -125,7 +128,14 @@ def sync_if_due(db, on_done, force=False):
     """
     if not force and db.get_setting(CHECKED_ON) == date.today().isoformat():
         return False                                      # already up to date today
+    if _state["running"]:                                 # a check is already on its way (4.7.1:
+        return True                                       # the log showed two at once) - don't start another
+    failed_at = _state["failed_at"]
+    if not force and failed_at is not None and time.monotonic() - failed_at < RETRY_AFTER_SECONDS:
+        on_done(None, False)                              # failed a moment ago: stay "Offline" for now
+        return True
     known = db.get_setting(VERSION)
+    _state["running"] = True
 
     def work():
         try:
@@ -133,8 +143,10 @@ def sync_if_due(db, on_done, force=False):
             download_missing_images(recipes)              # pictures first, so new cards look right
         except CatalogError as error:
             print(f"[FridgeChef] Catalogue check failed ({error}) - using the saved recipes")
+            _state.update(running=False, failed_at=time.monotonic())
             on_done(None, False)
             return
+        _state.update(running=False, failed_at=None)
         on_done((version, recipes) if version != known else None, True)
     threading.Thread(target=work, daemon=True).start()    # daemon: never keeps the app alive
     return True

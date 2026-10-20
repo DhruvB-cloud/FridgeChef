@@ -18,7 +18,15 @@ from kivy.config import Config
 if platform not in ("android", "ios"):             # on a PC, imitate a phone screen for testing
     Config.set("graphics", "width", "420")
     Config.set("graphics", "height", "840")
-Config.set("input", "mouse", "mouse,multitouch_on_demand")   # no red dots on right-click (desktop)
+    Config.set("input", "mouse", "mouse,multitouch_on_demand")   # no red dots on right-click (desktop)
+else:
+    # 4.7.1 fix: on a phone every finger touch ALSO arrives as a fake "mouse" event, so Kivy saw
+    # each touch TWICE. The second copy went straight to the recipe card under your finger, which
+    # grabbed it - swipes starting on a card froze, cards opened on touch, keyboards flickered.
+    # A phone has no mouse, so Kivy's mouse input is switched off here.
+    for option in ("mouse", "androidtouch"):           # "androidtouch" = an old, unused provider
+        if Config.has_option("input", option):
+            Config.remove_option("input", option)
 
 import os                                          # paths for data folders
 

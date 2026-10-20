@@ -424,13 +424,23 @@ class SoftInput(TextInput):
         handled = super().on_touch_up(touch)               # normal text-box behaviour first
         moved = abs(touch.x - touch.ox) + abs(touch.y - touch.oy)   # how far the finger travelled
         if self.collide_point(*touch.pos) and not self.disabled and moved < dp(12):   # a tap on us
-            Clock.schedule_once(self._open_keyboard, 0)   # 0 = on the next frame, after everything else
+            was_focused = touch.ud.get(f"was_focused_{id(self)}", False)   # remembered at touch-down
+            Clock.schedule_once(lambda dt: self._open_keyboard(was_focused), 0)   # next frame, after everything else
         return handled
 
-    def _open_keyboard(self, *_):
-        if not self.focus:                                 # not focused (e.g. focus was taken away) -> take it
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):                 # remember: was this box ALREADY selected?
+            touch.ud[f"was_focused_{id(self)}"] = self.focus
+        return super().on_touch_down(touch)
+
+    def _open_keyboard(self, was_focused):
+        from kivy.core.window import Window               # local import: keyboard_height (0 = no keyboard)
+        if not self.focus:                               # not focused (e.g. focus was taken away) -> take it
             self.focus = True
-        elif platform == "android":                        # focused, but the keyboard may be hidden:
+        elif platform == "android" and was_focused and not Window.keyboard_height:
+            # 4.7.1: ONLY when the box was already selected before this tap AND no keyboard is showing
+            # (e.g. you closed it with Back). Doing this on every tap closed and reopened the keyboard
+            # each time you selected a field - the flicker you saw.
             self.focus = False                             # dropping and regaining focus makes Android
             self.focus = True                              # show the keyboard again
 
