@@ -78,23 +78,30 @@ def icon(name):
 
 
 THUMBS_DIR = os.path.join(RECIPE_IMAGES_DIR, "thumbs")     # 256 px copies for lists (made by tools/make_assets.py)
+# 5.0: photos of the 80 newer recipes. They are in the project (for the PC version and the catalogue
+# exporter) but NOT in the APK - phones download them from GitHub Pages (see app/catalog.py).
+CATALOG_PHOTOS_DIR = os.path.join(ASSETS_DIR, "catalog_photos")
 
 
 def resolve_image(image_path, small=False):
     """Return a file path that exists for the stored image value, or None.
 
-    small=True prefers the 256 px thumbnail of a built-in picture: lists show pictures at about
-    90 x 90, so loading the 800 x 800 original there only wastes time and memory (version 4.0.1).
+    small=True prefers the 256 px thumbnail: lists show pictures at about 90 x 90, so loading the
+    800 x 800 original there only wastes time and memory (version 4.0.1).
+    Looks in: bundled pictures -> catalogue photos (PC only) -> downloaded copies (each with thumbs/).
     """
     if not image_path:
         return None
     if image_path.startswith("asset:"):                       # built-in / catalogue picture
         name = image_path[len("asset:"):]
-        if small and os.path.exists(os.path.join(THUMBS_DIR, name)):
-            return os.path.join(THUMBS_DIR, name)               # the small copy
-        for folder in (RECIPE_IMAGES_DIR, _cache_dir):          # bundled first, then downloaded
-            if folder and os.path.exists(os.path.join(folder, name)):
-                return os.path.join(folder, name)
+        folders = [f for f in (RECIPE_IMAGES_DIR, CATALOG_PHOTOS_DIR, _cache_dir) if f]
+        # small: thumbnails first; big: full pictures first, then a thumbnail is better than nothing.
+        order = ["thumbs", ""] if small else ["", "thumbs"]
+        for sub in order:
+            for folder in folders:
+                path = os.path.join(folder, sub, name) if sub else os.path.join(folder, name)
+                if os.path.exists(path):
+                    return path
         return None                                             # not available (yet)
     return image_path if os.path.exists(image_path) else None   # user photo on this device
 

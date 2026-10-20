@@ -27,11 +27,10 @@ from datetime import date, timedelta              # expiry dates
 
 from kivy.animation import Animation              # the "disappearing from the fridge" effect
 from kivy.core.text import Label as CoreLabel     # measures text without showing it (font fitting)
-from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Quad, Rectangle, RoundedRectangle,
-                           Scale, Translate, Triangle)   # low-level drawing: shelves, door bin, handle
+from kivy.graphics import (Color, Line, PopMatrix, PushMatrix, Quad, RoundedRectangle,
+                           Scale, Translate)          # low-level drawing: shelves, door bin, handle
 from kivy.metrics import dp, sp
 from kivy.properties import NumericProperty       # values Animation can change smoothly
-from kivy.uix.behaviors import ButtonBehavior     # makes an item tappable
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout      # lets the name sit ON the container picture
 from kivy.uix.gridlayout import GridLayout
@@ -44,27 +43,21 @@ from kivy.uix.widget import Widget
 from app.dates import format_date                 # shows dates as dd-mm-yyyy
 from app.expiry import expiring_soon, expiring_today
 from app.images import CONTAINER_ART, icon        # picture sizes + label positions, icon paths
-from app.ingredient_catalog import food_type      # "nonveg" / "egg" / "veg"
-from app.models import CONTAINER_LABELS, CONTAINER_PLACE, CONTAINERS, PantryItem
-from app.units import UNIT_CHOICES
+from app.ingredient_catalog import FRIDGE_UNITS, guess_info   # kg/pcs/L + unit, tag, shelf life (5.0)
+from app.models import CONTAINER_PLACE, PantryItem, guess_container
 from app.validation import name_error, parse_quantity   # 4.7.1: shared input rules
 from app.ui.autocomplete import AutoCompleteInput
 from app.ui.date_picker import DatePicker         # Day / Month / Year drop-downs
 from app.ui.easter_egg import is_love, play_hearts   # the "love" surprise
-from app.ui.widgets import (EGG_FILL, NONVEG_FILL, VEG_FILL,
-                            DANGER, DANGER_SOFT, HEX_RED, INK, INPUT_BG, MUTED, NEUTRAL,
-                            SELECTED_FILL, WHITE, Card, Header, Scene, SoftButton, SoftDropDown, TapBehavior,
+from app.ui.widgets import (TAG_STYLES, Chip,
+                            DANGER, DANGER_SOFT, HEX_RED, INK, MUTED, NEUTRAL,
+                            WHITE, Card, Header, Scene, SoftButton, TapBehavior,
                             gradient_texture,
                             SoftInput, SoftSpinner, WrapLabel, bg_rect, colored, labeled,
-                            light_popup, primary_action, scroll_list, set_bg, show_message)
+                            light_popup, primary_action, scroll_list, show_message)
 
 
 # Food type -> (fill colour of the Name box, small coloured explanation under it).
-FOOD_STYLES = {
-    "nonveg": (NONVEG_FILL, "[color=d0605f][b]Non-veg item[/b][/color]"),
-    "egg": (EGG_FILL, "[color=c98a2e][b]Egg[/b][/color]"),
-    "veg": (VEG_FILL, "[color=4f8a5b][b]Vegetarian[/b][/color]"),
-}
 
 # The fridge's colours are the "fridge" scene in widgets.SCENES (shared look of all tabs).
 SHELF = (1, 1, 1, 0.95)                           # white glass shelves and the door rail
@@ -454,96 +447,58 @@ class EditItemPopup:
         self.on_saved()
 
 
-class ContainerChoice(ButtonBehavior, BoxLayout):
-    """One line in the container drop-down: picture + name."""
-
-    def __init__(self, kind, **kwargs):
-        super().__init__(size_hint_y=None, height=dp(52), padding=(dp(6), dp(4)), spacing=dp(8), **kwargs)
-        self.kind = kind
-        bg_rect(self, WHITE, radius=dp(12))
-        self.add_widget(Image(source=icon(f"container_{kind}"), fit_mode="contain",
-                              size_hint_x=None, width=dp(40)))
-        self.label = Label(text=CONTAINER_LABELS[kind], color=INK, font_size=sp(14), halign="left")
-        self.label.bind(size=lambda l, s: setattr(l, "text_size", s))   # left-align
-        self.add_widget(self.label)
-
-    def set_selected(self, selected):
-        set_bg(self, SELECTED_FILL if selected else WHITE)   # the current choice is light green
-        self.label.bold = selected
-
-
-class ContainerButton(ButtonBehavior, BoxLayout):
-    """The small picture next to the Name box. Tap it: a drop-down with Bottle / Glass jar / Dish."""
-
-    def __init__(self, value="jar", **kwargs):
-        super().__init__(size_hint_x=None, width=dp(58), padding=dp(5), **kwargs)
-        bg_rect(self, INPUT_BG, radius=dp(14))            # same grey box as the text inputs
-        self.picture = Image(fit_mode="contain")
-        self.add_widget(self.picture)
-        with self.canvas.after:                           # a little "v" in the corner = "tap for more"
-            Color(*MUTED)
-            self._arrow = Triangle()
-        self.bind(pos=self._draw_arrow, size=self._draw_arrow)
-        self.dropdown = SoftDropDown(auto_width=False, width=dp(300), max_height=dp(380))
-        self.dropdown.container.cols = 2                  # 8 choices: two columns of four
-        self.options = {}
-        for kind in CONTAINERS:
-            option = ContainerChoice(kind)
-            option.bind(on_release=lambda o: self.dropdown.select(o.kind))
-            self.options[kind] = option
-            self.dropdown.add_widget(option)
-        self.dropdown.bind(on_select=lambda _dd, kind: self.set_value(kind))
-        self.bind(on_release=lambda *_: self.dropdown.open(self))
-        self.set_value(value)
-
-    def _draw_arrow(self, *_):
-        x, y = self.right - dp(9), self.y + dp(7)        # bottom-right corner
-        self._arrow.points = [x - dp(4), y + dp(4), x + dp(4), y + dp(4), x, y]
-
-    def set_value(self, kind):
-        self.value = kind
-        self.picture.source = icon(f"container_{kind}")
-        for option_kind, option in self.options.items():
-            option.set_selected(option_kind == kind)
-
-
 class AddItemPopup:
-    """Form for adding a new item: container + name, quantity & unit, expiry date.
+    """Quick "Add item" form (version 5.0 - testers wanted less typing).
 
+    Type a name: the unit (kg / pcs / L), a usual amount, the tag (Fresh produce, Meat, ...) and the
+    expiry date are filled in from the ingredient catalogue. Only the amount usually needs a look;
+    the date can be changed with "Change", but never has to be.
     (A plain class that *builds* a Popup, rather than subclassing Popup, keeps the code simple.)
     """
 
     def __init__(self, app, on_saved=None):
         self.app, self.on_saved = app, on_saved
-        form = GridLayout(cols=1, spacing=dp(10), padding=dp(6), size_hint_y=None)
+        self._auto_qty = ""                               # the amount WE filled in (so we may replace it)
+        self._date_changed = False                        # True once the user picks a date themselves
+        form = GridLayout(cols=1, spacing=dp(12), padding=dp(6), size_hint_y=None)
         form.bind(minimum_height=form.setter("height"))
 
-        # Row 1: the container picture (a jar unless you pick another) + the type-ahead name box.
-        name_row = BoxLayout(spacing=dp(8))
-        self.container_btn = ContainerButton("jar")
-        name_row.add_widget(self.container_btn)
-        self.name_in = AutoCompleteInput(text="", hint_text="Start typing, e.g. oni...", rule="name",   # 4.7.1
-                                         extra_names=app.db.ingredient_names(),
-                                         on_pick=self._picked)
-        name_row.add_widget(self.name_in)
-        form.add_widget(labeled("Name", name_row))
-        # Food-type colouring: light red = non-veg, light yellow = egg, light green = veg.
-        self.food_hint = WrapLabel(text="", font_size=sp(12))   # e.g. "Non-veg item" under the box
-        form.add_widget(self.food_hint)
-        self.name_in.bind(text=lambda *_: self._show_food_type())
+        self.name_in = AutoCompleteInput(text="", hint_text="What did you buy? e.g. Milk", rule="name",
+                                         extra_names=app.db.ingredient_names(), on_pick=self._picked)
+        form.add_widget(labeled("Item", self.name_in))
+        self.name_in.bind(text=lambda *_: self._fill_from_catalogue())
 
         qty_row = BoxLayout(spacing=dp(8))
-        self.qty_in = SoftInput(text="", rule="qty", hint_text="Quantity")   # 4.7.1: positive, max 9999.99
-        self.unit_in = SoftSpinner(text="pcs", values=UNIT_CHOICES, size_hint_x=0.6)
+        self.qty_in = SoftInput(text="", rule="qty", hint_text="Amount")   # positive, max 9999.99
+        self.qty_in.bind(text=lambda *_: setattr(self, "_auto_qty", None)
+                         if self.qty_in.text != self._auto_qty else None)   # the user typed their own
+        self.unit_in = SoftSpinner(text="pcs", values=FRIDGE_UNITS, size_hint_x=0.55)
         qty_row.add_widget(self.qty_in)
         qty_row.add_widget(self.unit_in)
-        form.add_widget(labeled("Quantity & unit", qty_row))
+        form.add_widget(labeled("Amount", qty_row))
 
-        # Expiry date: Day / Month / Year drop-downs (dd-mm-yyyy). Every food has one now - only
-        # the built-in Water never expires - so there is no "Never expires" switch any more.
-        form.add_widget(WrapLabel(text="Expiry date", color=MUTED, font_size=sp(13)))
+        # The tag chip, then "Expires 27-10-2026 (in 6 days)  [Change]" on its own line.
+        tag_row = BoxLayout(size_hint_y=None, height=dp(26))
+        self.tag_chip = Chip("Pantry", *TAG_STYLES["Pantry"][:2])
+        tag_row.add_widget(self.tag_chip)
+        tag_row.add_widget(Widget())                      # pushes the chip to the left
+        form.add_widget(tag_row)
+        expiry_row = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(8))
+        self.expiry_label = Label(text="", markup=True, color=INK, font_size=sp(14), halign="left",
+                                  valign="middle", shorten=True, shorten_from="right")
+        self.expiry_label.bind(size=lambda l, sz: setattr(l, "text_size", sz))
+        expiry_row.add_widget(self.expiry_label)
+        expiry_row.add_widget(SoftButton("Change", size_hint=(None, None), size=(dp(84), dp(34)),
+                                         bg=NEUTRAL, fg=INK, font_size=sp(13),
+                                         on_release=lambda *_: self._toggle_date_picker()))
+        form.add_widget(expiry_row)
+
+        # The date picker stays hidden until "Change" is tapped.
         self.date_picker = DatePicker(date.today() + timedelta(days=7), allow_never=False)
-        form.add_widget(self.date_picker)
+        self._setting_date = False                        # True while WE change the date
+        for spinner in (self.date_picker.day, self.date_picker.month, self.date_picker.year):
+            spinner.bind(text=lambda *_: self._date_spinner_changed())
+        self.form = form
 
         self.error = WrapLabel(text="", color=DANGER)     # validation messages appear here
         form.add_widget(self.error)
@@ -552,31 +507,66 @@ class AddItemPopup:
         scroll.add_widget(form)
         outer = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(6))
         outer.add_widget(scroll)
-        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        buttons = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(10))
         buttons.add_widget(SoftButton("Cancel", bg=NEUTRAL, fg=INK,
                                       on_release=lambda *_: self.popup.dismiss()))
-        buttons.add_widget(SoftButton("Save", on_release=lambda *_: self._save()))
+        buttons.add_widget(SoftButton("Add to fridge", on_release=lambda *_: self._save()))
         outer.add_widget(buttons)
-        self.popup = light_popup("Add item", outer, size_hint=(0.94, None), height=dp(500))   # scrolls if the screen is smaller
+        self.popup = light_popup("Add item", outer, size_hint=(0.94, None), height=dp(400))
         # Close the suggestion list together with the form, so it can't stay floating on screen.
         self.popup.bind(on_dismiss=lambda *_: self.name_in.close_suggestions())
+        self._fill_from_catalogue()
 
     def open(self):
         self.popup.open()
 
-    def _show_food_type(self):
-        """Colour the Name box by food type and explain the colour underneath."""
-        kind = food_type(self.name_in.text)               # "nonveg" / "egg" / "veg" / None
-        fill, hint = FOOD_STYLES.get(kind, (None, ""))    # None = normal grey / green-when-selected
-        self.name_in.set_tint(fill)
-        self.food_hint.text = hint
+    # ------------------------------------------------------------------ automatic filling
+    def _fill_from_catalogue(self):
+        """Use the catalogue (or a sensible guess) for unit, amount, tag and expiry date."""
+        name = self.name_in.text.strip()
+        info = guess_info(name) if name else None
+        if info:
+            self.unit_in.text = info.unit
+            if self._auto_qty is not None:                # the user hasn't typed an amount of their own
+                self._auto_qty = f"{info.default_qty:g}"  # e.g. "1" (L of milk) or "0.25" (kg)
+                self.qty_in.text = self._auto_qty
+            bg, fg, _icon = TAG_STYLES[info.tag]
+            self.tag_chip.text = info.tag
+            self.tag_chip._bg_color.rgba, self.tag_chip.color = bg, fg
+            if not self._date_changed:                    # don't overwrite a date the user picked
+                self._setting_date = True
+                self.date_picker.set_date(date.today() + timedelta(days=info.shelf_days))
+                self._setting_date = False
+        self.tag = info.tag if info else "Pantry"
+        self._show_expiry()
+
+    def _show_expiry(self):
+        """'Expires 27-10-2026 (in 6 days)' in the summary line."""
+        if not self.date_picker.day.text:                 # the picker is still being built
+            return
+        expiry = self.date_picker.get_date()
+        left = (expiry - date.today()).days
+        when = "today" if left == 0 else ("tomorrow" if left == 1 else f"in {left} days")
+        self.expiry_label.text = f"Expires [b]{format_date(expiry)}[/b] ({when})"
+
+    def _date_spinner_changed(self):
+        """A Day / Month / Year drop-down changed: by the user (their date now wins) or by us."""
+        if not self._setting_date:
+            self._date_changed = True
+        self._show_expiry()
+
+    def _toggle_date_picker(self):
+        """Show / hide the Day-Month-Year picker under the expiry line."""
+        if self.date_picker.parent is None:               # hidden -> show it just above the error line
+            self.form.add_widget(self.date_picker, index=1)
+        else:
+            self.form.remove_widget(self.date_picker)
 
     def _picked(self, name, info):
-        """A suggestion was chosen: pre-fill the usual unit."""
-        if info:
-            self.unit_in.text = info[0]                   # info = (unit, category)
-        self.qty_in.focus = True                          # jump straight to the quantity box
+        """A suggestion was chosen: the text change already filled everything in - go to the amount."""
+        self.qty_in.focus = True
 
+    # ------------------------------------------------------------------ saving
     def _save(self):
         """Validate the form, then add the item to the database."""
         name = self.name_in.text.strip()
@@ -588,7 +578,7 @@ class AddItemPopup:
             self.popup.dismiss()                          # close the form...
             play_hearts()                                 # ...and let the hearts fly instead
             return
-        if PantryItem(name, 0, "l").is_water:             # Water is built in
+        if PantryItem(name, 0, "L").is_water:             # Water is built in
             self.error.text = "Water is always in your fridge - no need to add it."
             return
         try:
@@ -600,11 +590,12 @@ class AddItemPopup:
         if expiry < date.today():
             self.error.text = "That date has already passed - please pick today or later."
             return
+        unit = self.unit_in.text
         # Two items with the same name stay two separate items (e.g. two packs of milk with
         # different dates). Cooking uses the one that expires soonest first (recipe_engine.py).
-        self.app.db.add_pantry_item(PantryItem(name=name, quantity=quantity, unit=self.unit_in.text,
-                                               category="Fridge", expiry=expiry,
-                                               container=self.container_btn.value))
+        self.app.db.add_pantry_item(PantryItem(name=name, quantity=quantity, unit=unit,
+                                               category="Fridge", expiry=expiry, tag=self.tag,
+                                               container=guess_container(name, unit, self.tag)))
         self.popup.dismiss()
         self.app.check_expiry()                           # a new item might expire today
         if self.on_saved:

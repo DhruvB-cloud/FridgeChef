@@ -20,6 +20,7 @@ UNITS = {
     "kg": ("mass", 1000.0),        # 1 kilogram = 1000 grams
     "ml": ("volume", 1.0),         # 1 millilitre = 1 ml (the base unit for volume)
     "l": ("volume", 1000.0),       # 1 litre = 1000 ml
+    "L": ("volume", 1000.0),       # the same litre, written "L" in the Fridge (version 5.0)
     "tsp": ("volume", 5.0),        # 1 teaspoon is about 5 ml
     "tbsp": ("volume", 15.0),      # 1 tablespoon is about 15 ml
     "cup": ("volume", 240.0),      # 1 cup is about 240 ml
@@ -28,7 +29,7 @@ UNITS = {
 }
 
 # The list shown in the unit drop-downs of the UI (keeps the same order as above).
-UNIT_CHOICES = list(UNITS.keys())
+UNIT_CHOICES = [u for u in UNITS if u != "L"]   # recipe forms; "L" is the Fridge's spelling of "l"
 
 
 def to_base(quantity, unit):

@@ -19,7 +19,8 @@ source.include_exts = py,png,jpg,jpeg,ttf,json,txt
 # server (it runs on a computer, not the phone) and the developer asset tools.
 # The assets/ folder (recipe pictures, icons, rounded UI shapes) IS included.
 # local_data = the app's data when run on a PC (4.7.1) - it must never end up inside an APK.
-source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs,local_data
+# assets/catalog_photos = photos of the 80 newer recipes (5.0): phones download them from GitHub Pages.
+source.exclude_dirs = tests,.venv,bin,.buildozer,server,tools,killswitch,docs,local_data,site,assets/catalog_photos
 # App version shown in Android settings.
 version = 4.7.1
 # Python packages bundled into the APK:

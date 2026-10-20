@@ -82,5 +82,325 @@
   "cheese-toastie": {
     "file": "File:Grilled cheese sandwiches.jpg",
     "focus_y": 0.5
+  },
+  "palak-paneer": {
+    "file": "File:Palakpaneer Rayagada Odisha 0009.jpg",
+    "focus_y": 0.5
+  },
+  "butter-chicken": {
+    "file": "File:Chicken makhani.jpg",
+    "focus_y": 0.5
+  },
+  "aloo-gobi": {
+    "file": "File:Aloo Gobi Sabzi.jpg",
+    "focus_y": 0.5
+  },
+  "upma": {
+    "file": "File:Upma South India.JPG",
+    "focus_y": 0.5
+  },
+  "masala-dosa": {
+    "file": "File:Masala dosa 01.jpg",
+    "focus_y": 0.5
+  },
+  "egg-curry": {
+    "file": "File:Spicy Anda Curry.jpg",
+    "focus_y": 0.5
+  },
+  "matar-paneer": {
+    "file": "File:Matar-Paneer.JPG",
+    "focus_y": 0.5
+  },
+  "baingan-bharta": {
+    "file": "File:Baingan Ka Bharta.JPG",
+    "focus_y": 0.5
+  },
+  "khichdi": {
+    "file": "File:Spicy Khichdi.JPG",
+    "focus_y": 0.5
+  },
+  "lemon-rice": {
+    "file": "File:Lemon Rice in Kerala.jpg",
+    "focus_y": 0.5
+  },
+  "curd-rice": {
+    "file": "File:Curd rice in ICH Bhopal.jpg",
+    "focus_y": 0.5
+  },
+  "besan-chilla": {
+    "file": "File:Chilla besan.JPG",
+    "focus_y": 0.5
+  },
+  "aloo-paratha": {
+    "file": "File:Aloo Paratha (96238).jpg",
+    "focus_y": 0.5
+  },
+  "chicken-biryani": {
+    "file": "File:A home made plate of mutton biryani served with chicken kassa cooked in the bengali style.jpg",
+    "focus_y": 0.5
+  },
+  "fish-curry": {
+    "file": "File:Meen curry 2.JPG",
+    "focus_y": 0.5
+  },
+  "sooji-halwa": {
+    "file": "File:Sooji Halwa (Semolina Pudding).JPG",
+    "focus_y": 0.5
+  },
+  "rice-kheer": {
+    "file": "File:Kheer Special.JPG",
+    "focus_y": 0.5
+  },
+  "pav-bhaji": {
+    "file": "File:Pav Bhaji.jpg",
+    "focus_y": 0.5
+  },
+  "methi-thepla": {
+    "file": "File:Masala thepla with Methi kela.JPG",
+    "focus_y": 0.5
+  },
+  "falafel": {
+    "file": "File:Falafel 1.JPG",
+    "focus_y": 0.5
+  },
+  "baba-ganoush": {
+    "file": "File:Baba Ghanoush.jpg",
+    "focus_y": 0.5
+  },
+  "foul-medames": {
+    "file": "File:Ful Medames.JPG",
+    "focus_y": 0.5
+  },
+  "manakish-za-atar": {
+    "file": "File:Israeli zaatar manakeesh.jpg",
+    "focus_y": 0.5
+  },
+  "chicken-kabsa": {
+    "file": "File:Chicken Kabsa.jpg",
+    "focus_y": 0.5
+  },
+  "kofta-kebab": {
+    "file": "File:Lula kebab 2.jpg",
+    "focus_y": 0.5
+  },
+  "musakhan": {
+    "file": "File:Musakhan served in Jerusalem, Israel.jpg",
+    "focus_y": 0.5
+  },
+  "om-ali": {
+    "file": "File:Traditional Om Ali Dessert Served Warm with Nuts.jpg",
+    "focus_y": 0.5
+  },
+  "full-english-breakfast": {
+    "file": "File:Full Breakfast Set of Breakfast from FOOD2 by Maxims.jpg",
+    "focus_y": 0.5
+  },
+  "fish-and-chips": {
+    "file": "File:Fish and chips plate with peas.jpg",
+    "focus_y": 0.5
+  },
+  "shepherd-s-pie": {
+    "file": "File:Shepherd's pie (22470901009).jpg",
+    "focus_y": 0.5
+  },
+  "bangers-and-mash": {
+    "file": "File:Irish bangers and mash.jpg",
+    "focus_y": 0.5
+  },
+  "beans-on-toast": {
+    "file": "File:Beans on toast - Monty's 2025-12-05.jpg",
+    "focus_y": 0.5
+  },
+  "leek-and-potato-soup": {
+    "file": "File:Leek & Potato + celeriac soup.jpg",
+    "focus_y": 0.5
+  },
+  "pancakes": {
+    "file": "File:Foodiesfeed.com pouring-honey-on-pancakes-with-walnuts.jpg",
+    "focus_y": 0.5
+  },
+  "egg-mayo-sandwich": {
+    "file": "File:Egg salad, scallion, mayo, dijon.jpg",
+    "focus_y": 0.5
+  },
+  "roast-chicken-and-vegetables": {
+    "file": "File:Liat Portal for Foodie Disorder - Roasted chicken with vegetables and white rice.jpg",
+    "focus_y": 0.5
+  },
+  "ploughman-s-lunch": {
+    "file": "File:An Elsecar Ploughman's Lunch.jpg",
+    "focus_y": 0.5
+  },
+  "spaghetti-aglio-e-olio": {
+    "file": "File:Spaghetti aglio e olio KB.jpg",
+    "focus_y": 0.5
+  },
+  "penne-arrabbiata": {
+    "file": "File:Penne Arrabbiata.jpg",
+    "focus_y": 0.5
+  },
+  "spaghetti-bolognese": {
+    "file": "File:Spaghetti Bolognese - Figaros, Brighton 2023-10-06.jpg",
+    "focus_y": 0.5
+  },
+  "margherita-pizza": {
+    "file": "File:Margherita Originale.JPG",
+    "focus_y": 0.5
+  },
+  "mushroom-risotto": {
+    "file": "File:Risotto con Funghi e Piselli.jpg",
+    "focus_y": 0.5
+  },
+  "caprese-salad": {
+    "file": "File:Insalata Caprese (from Poznan).JPG",
+    "focus_y": 0.5
+  },
+  "minestrone-soup": {
+    "file": "File:Minestrone soup.jpg",
+    "focus_y": 0.5
+  },
+  "pasta-alfredo": {
+    "file": "File:Chicken fettuccine alfredo.JPG",
+    "focus_y": 0.5
+  },
+  "bruschetta": {
+    "file": "File:A typical Maltese bruschetta with fresh Mediterranean ingredients.jpg",
+    "focus_y": 0.5
+  },
+  "pesto-pasta": {
+    "file": "File:Shrimp and basil pesto pasta 1.jpg",
+    "focus_y": 0.5
+  },
+  "chicken-parmesan": {
+    "file": "File:Tony's of North Beach - December 2022 - Sarah Stierch 05.jpg",
+    "focus_y": 0.5
+  },
+  "lasagne": {
+    "file": "File:Lasagne - stonesoup.jpg",
+    "focus_y": 0.5
+  },
+  "egg-fried-rice": {
+    "file": "File:Egg Fried Rice.jpg",
+    "focus_y": 0.5
+  },
+  "hakka-noodles": {
+    "file": "File:Tasty hakka noodles image.jpg",
+    "focus_y": 0.5
+  },
+  "chilli-paneer": {
+    "file": "File:Chilly Paneer 01.jpg",
+    "focus_y": 0.5
+  },
+  "gobi-manchurian": {
+    "file": "File:ಗೋಬಿ ಮಂಚುರಿ.jpg",
+    "focus_y": 0.5
+  },
+  "pad-thai": {
+    "file": "File:Phat Thai kung Chang Khien street stall.jpg",
+    "focus_y": 0.5
+  },
+  "thai-green-curry": {
+    "file": "File:Thai green chicken curry and roti.jpg",
+    "focus_y": 0.5
+  },
+  "teriyaki-chicken": {
+    "file": "File:Chicken teriyaki bento box - Massachusetts.jpg",
+    "focus_y": 0.5
+  },
+  "hot-and-sour-soup": {
+    "file": "File:Hot-and-Sour-Soup-Bowl.jpg",
+    "focus_y": 0.5
+  },
+  "vegetable-spring-rolls": {
+    "file": "File:Golden Vegetable Spring Rolls Served with Dipping Sauce.jpg",
+    "focus_y": 0.5
+  },
+  "chicken-stir-fry": {
+    "file": "File:Noodle stir fry with chicken, shrimp, and broccoli (18471621051).jpg",
+    "focus_y": 0.5
+  },
+  "sweet-and-sour-chicken": {
+    "file": "File:Sweet and Sour Chicken.JPG",
+    "focus_y": 0.5
+  },
+  "chicken-quesadilla": {
+    "file": "File:Chicken quesadilla - Massachusetts.jpg",
+    "focus_y": 0.5
+  },
+  "bean-burrito": {
+    "file": "File:Pinto Bean and Spinach Burrito (5034780791).jpg",
+    "focus_y": 0.5
+  },
+  "guacamole": {
+    "file": "File:Guacamole IMGP1271.jpg",
+    "focus_y": 0.5
+  },
+  "nachos": {
+    "file": "File:Nachos-cheese (cropped).jpg",
+    "focus_y": 0.5
+  },
+  "chicken-tacos": {
+    "file": "File:Tacos al pastor.jpg",
+    "focus_y": 0.5
+  },
+  "mexican-rice": {
+    "file": "File:Mexican rice and beans.jpg",
+    "focus_y": 0.5
+  },
+  "black-bean-soup": {
+    "file": "File:Black Bean Soup (140491813).jpeg",
+    "focus_y": 0.5
+  },
+  "huevos-rancheros": {
+    "file": "File:Huevos rancheros.jpg",
+    "focus_y": 0.5
+  },
+  "burrito-bowl": {
+    "file": "File:Steak burrito bowl at La Casa Restaurant in Sonoma, California - Sarah Stierch 03.jpg",
+    "focus_y": 0.5
+  },
+  "chana-masala": {
+    "file": "File:Chole Bhature 1.jpg",
+    "focus_y": 0.5
+  },
+  "tomato-rice": {
+    "file": "File:Tomato Rice up-close (1862224148).jpg",
+    "focus_y": 0.5
+  },
+  "tabbouleh": {
+    "file": "File:Flickr - cyclonebill - Tabbouleh.jpg",
+    "focus_y": 0.5
+  },
+  "shorbat-adas": {
+    "file": "File:Homemade Lentil Soup - Lavash 2025-02-10.jpg",
+    "focus_y": 0.5
+  },
+  "fatteh": {
+    "file": "File:Hummos Fatteh.jpg",
+    "focus_y": 0.5
+  },
+  "vegetable-fried-rice": {
+    "file": "File:Kerala vegetable fried rice 2.jpg",
+    "focus_y": 0.5
+  },
+  "veggie-enchiladas": {
+    "file": "File:Enchiladas con salsa roja.jpg",
+    "focus_y": 0.5
+  },
+  "rajma-chawal": {
+    "file": "File:Rajma Masala (32081557778).jpg",
+    "focus_y": 0.5
+  },
+  "bhindi-masala": {
+    "file": "File:Bhindi fry.jpg",
+    "focus_y": 0.5
+  },
+  "mango-lassi": {
+    "file": "File:Mango lassi at Everest Dine in November 2022.jpg",
+    "focus_y": 0.5
+  },
+  "labneh-toast": {
+    "file": "File:Hangop bord.jpg",
+    "focus_y": 0.5
   }
 }

@@ -84,6 +84,17 @@ EGG_FILL = (1.0, 0.96, 0.78, 1)      # light yellow - eggs
 VEG_FILL = (0.86, 0.95, 0.86, 1)     # light green  - everything vegetarian
 WHITE = (1, 1, 1, 1)
 
+# 5.0: every fridge tag has its own colour pair (soft background, strong text) and an icon name.
+TAG_STYLES = {
+    "Fresh produce": ((0.88, 0.96, 0.86, 1), (0.16, 0.52, 0.27, 1), "tab_fridge"),
+    "Meat": ((1.00, 0.89, 0.89, 1), (0.74, 0.24, 0.28, 1), "muscle"),
+    "Bakery": ((1.00, 0.94, 0.82, 1), (0.66, 0.43, 0.10, 1), "grain"),
+    "Frozen": ((0.87, 0.94, 1.00, 1), (0.18, 0.43, 0.72, 1), "bolt"),
+    "Grain": ((1.00, 0.97, 0.80, 1), (0.55, 0.47, 0.08, 1), "grain"),
+    "Pantry": ((0.93, 0.90, 1.00, 1), (0.40, 0.30, 0.70, 1), "plate"),
+    "Dry goods": ((0.97, 0.91, 0.86, 1), (0.53, 0.34, 0.20, 1), "star"),
+}
+
 # Gradients: (top colour, bottom colour). Buttons, the active tab and header badges use these.
 GRAD_PRIMARY = ((0.33, 0.78, 0.52, 1), (0.10, 0.55, 0.42, 1))   # emerald
 GRAD_DANGER = ((1.00, 0.55, 0.45, 1), (0.89, 0.32, 0.36, 1))    # coral

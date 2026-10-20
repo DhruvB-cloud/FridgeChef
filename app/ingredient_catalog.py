@@ -3,56 +3,92 @@ ingredient_catalog.py
 ---------------------
 WHY THIS FILE EXISTS:
     Powers the type-ahead drop-down: when the user types "oni", the app suggests "Onion".
-    Each known ingredient also carries a sensible default unit and where it is usually kept,
-    so picking a suggestion fills in the unit and Fridge/Outside fields automatically.
+
+    Version 5.0 (testers asked for less typing): every known ingredient also carries
+      * its UNIT    - only kg, pcs or L (the three units the Fridge form offers),
+      * its TAG     - Fresh produce, Meat, Bakery, Frozen, Grain, Pantry or Dry goods,
+      * its SHELF LIFE in days - so the expiry date is filled in automatically,
+      * a DEFAULT QUANTITY - what people usually buy (e.g. 1 L milk, 6 eggs).
+    So adding "Milk" to the fridge is: type the name, check the amount, Save.
+
     The suggest() function also mixes in names the user has typed before (from their pantry and
     recipes), so the list gets more personal over time.
 """
 
-# (name, default unit, usual category) - alphabetical inside each group for easy maintenance.
-CATALOG = [
-    # Vegetables
-    ("Bell pepper", "pcs", "Fridge"), ("Broccoli", "g", "Fridge"), ("Cabbage", "g", "Fridge"),
-    ("Carrot", "pcs", "Fridge"), ("Cauliflower", "g", "Fridge"), ("Cucumber", "pcs", "Fridge"),
-    ("Eggplant", "pcs", "Fridge"), ("Garlic", "pcs", "Outside"), ("Ginger", "g", "Fridge"),
-    ("Green beans", "g", "Fridge"), ("Green chili", "pcs", "Fridge"), ("Green onion", "pcs", "Fridge"),
-    ("Lettuce", "pcs", "Fridge"), ("Mushroom", "g", "Fridge"), ("Okra", "g", "Fridge"),
-    ("Onion", "pcs", "Outside"), ("Peas", "g", "Fridge"), ("Potato", "pcs", "Outside"),
-    ("Pumpkin", "g", "Fridge"), ("Spinach", "g", "Fridge"), ("Sweet potato", "pcs", "Outside"),
-    ("Tomato", "pcs", "Fridge"), ("Zucchini", "pcs", "Fridge"),
-    # Herbs
-    ("Basil", "bunch", "Fridge"), ("Coriander", "bunch", "Fridge"), ("Curry leaves", "bunch", "Fridge"),
-    ("Dill", "bunch", "Fridge"), ("Fenugreek leaves", "bunch", "Fridge"), ("Mint", "bunch", "Fridge"),
-    ("Parsley", "bunch", "Fridge"),
-    # Dairy & eggs
-    ("Butter", "g", "Fridge"), ("Cheese", "g", "Fridge"), ("Cream", "ml", "Fridge"),
-    ("Egg", "pcs", "Fridge"), ("Labneh", "g", "Fridge"), ("Milk", "ml", "Fridge"),
-    ("Paneer", "g", "Fridge"), ("Yogurt", "g", "Fridge"), ("Curd", "g", "Fridge"),
-    # Fruits
-    ("Apple", "pcs", "Fridge"), ("Avocado", "pcs", "Fridge"), ("Banana", "pcs", "Outside"),
-    ("Dates", "g", "Outside"), ("Grapes", "g", "Fridge"), ("Lemon", "pcs", "Fridge"),
-    ("Lime", "pcs", "Fridge"), ("Mango", "pcs", "Fridge"), ("Orange", "pcs", "Fridge"),
-    ("Pomegranate", "pcs", "Fridge"), ("Strawberry", "g", "Fridge"),
-    # Meat & fish
-    ("Chicken", "g", "Fridge"), ("Fish", "g", "Fridge"), ("Lamb", "g", "Fridge"),
-    ("Minced meat", "g", "Fridge"), ("Prawns", "g", "Fridge"),
-    # Grains, flours, pulses
-    ("Basmati rice", "g", "Outside"), ("Bread", "pcs", "Outside"), ("Bulgur", "g", "Outside"),
-    ("Chickpeas", "g", "Outside"), ("Couscous", "g", "Outside"), ("Flour", "g", "Outside"),
-    ("Kidney beans", "g", "Outside"), ("Lentils", "g", "Outside"), ("Oats", "g", "Outside"),
-    ("Pasta", "g", "Outside"), ("Pita bread", "pcs", "Outside"), ("Poha", "g", "Outside"),
-    ("Rice", "g", "Outside"), ("Semolina", "g", "Outside"), ("Wheat flour", "g", "Outside"),
-    # Spices, oils & pantry
-    ("Baked beans", "g", "Outside"), ("Cinnamon", "tsp", "Outside"), ("Cumin", "tsp", "Outside"),
-    ("Garam masala", "tsp", "Outside"), ("Ginger garlic paste", "tbsp", "Fridge"),
-    ("Honey", "tbsp", "Outside"), ("Oil", "ml", "Outside"), ("Olive oil", "ml", "Outside"),
-    ("Paprika", "tsp", "Outside"), ("Peanuts", "g", "Outside"), ("Red chili powder", "tsp", "Outside"),
-    ("Salt", "g", "Outside"), ("Sugar", "g", "Outside"), ("Tahini", "tbsp", "Outside"),
-    ("Turmeric", "tsp", "Outside"), ("Za'atar", "tsp", "Outside"),
-]
+from collections import namedtuple
 
-# Fast lookup: lower-case name -> (name, unit, category).
-_BY_NAME = {name.lower(): (name, unit, cat) for name, unit, cat in CATALOG}
+# The three units the Fridge form offers, and the tags an item can carry.
+FRIDGE_UNITS = ["kg", "pcs", "L"]
+TAGS = ["Fresh produce", "Meat", "Bakery", "Frozen", "Grain", "Pantry", "Dry goods"]
+# Dairy and eggs have no tag of their own in the list Dhruv chose, so they count as fresh produce.
+
+# What we know about one ingredient (a namedtuple = a tiny read-only class with named fields).
+IngredientInfo = namedtuple("IngredientInfo", "unit tag shelf_days default_qty")
+
+# For names we don't know: counted in pieces, kept a week, tagged as pantry food.
+UNKNOWN = IngredientInfo("pcs", "Pantry", 7, 1)
+
+
+def _group(tag, unit, days, qty, names):
+    """Many ingredients with the same tag / unit / shelf life / usual amount, in one line each."""
+    return [(name, IngredientInfo(unit, tag, days, qty)) for name in names.split(", ")]
+
+
+# (name, IngredientInfo) - grouped by tag; shelf lives are typical for a home fridge or cupboard.
+CATALOG = (
+    # ---------------------------------------------------------------- FRESH PRODUCE: vegetables
+    _group("Fresh produce", "pcs", 7, 4, "Onion, Potato, Sweet potato, Garlic, Lemon, Lime")
+    + _group("Fresh produce", "pcs", 6, 3, "Tomato, Carrot, Bell pepper, Cucumber, Zucchini, "
+             "Eggplant, Avocado, Green chili, Jalapeno, Leek, Corn")
+    + _group("Fresh produce", "pcs", 5, 1, "Cabbage, Cauliflower, Broccoli, Lettuce, Pumpkin")
+    + _group("Fresh produce", "kg", 5, 0.25, "Mushroom, Okra, Green beans, Peas, Bean sprouts, "
+             "Ginger, Spinach")
+    # herbs (one bunch each, they wilt fast)
+    + _group("Fresh produce", "pcs", 4, 1, "Coriander, Mint, Parsley, Basil, Dill, Curry leaves, "
+             "Fenugreek leaves, Green onion")
+    # fruit
+    + _group("Fresh produce", "pcs", 6, 6, "Apple, Banana, Orange, Mango, Pomegranate")
+    + _group("Fresh produce", "kg", 5, 0.5, "Grapes, Strawberry, Pineapple")
+    # dairy & eggs
+    + _group("Fresh produce", "L", 5, 1, "Milk")
+    + _group("Fresh produce", "L", 7, 0.2, "Cream, Sour cream")
+    + _group("Fresh produce", "kg", 7, 0.5, "Yogurt, Curd, Labneh")
+    + _group("Fresh produce", "kg", 4, 0.2, "Paneer")
+    + _group("Fresh produce", "kg", 21, 0.2, "Cheese, Mozzarella, Parmesan")
+    + _group("Fresh produce", "kg", 30, 0.1, "Butter")
+    + _group("Fresh produce", "pcs", 21, 6, "Egg")
+    # ---------------------------------------------------------------- MEAT
+    + _group("Meat", "kg", 2, 0.5, "Chicken, Lamb, Minced meat, Fish, Prawns")
+    + _group("Meat", "pcs", 4, 6, "Chicken sausage")
+    # ---------------------------------------------------------------- BAKERY
+    + _group("Bakery", "pcs", 4, 1, "Bread")
+    + _group("Bakery", "pcs", 4, 6, "Pita bread, Bread roll, Tortilla")
+    # ---------------------------------------------------------------- FROZEN
+    + _group("Frozen", "kg", 90, 0.5, "Frozen peas, Frozen mixed vegetables, Frozen berries")
+    + _group("Frozen", "pcs", 90, 1, "Puff pastry, Pizza base, Spring roll wrappers")
+    # ---------------------------------------------------------------- GRAIN
+    + _group("Grain", "kg", 365, 1, "Rice, Basmati rice, Arborio rice, Oats, Poha, Semolina, Bulgur, "
+             "Couscous, Pasta, Spaghetti, Noodles, Rice noodles, Lasagne sheets")
+    + _group("Grain", "kg", 180, 1, "Flour, Wheat flour, Gram flour, Cornflour, Breadcrumbs")
+    + _group("Grain", "kg", 3, 0.5, "Dosa batter")
+    # ---------------------------------------------------------------- PANTRY (oils, sauces, spices, tins)
+    + _group("Pantry", "L", 365, 1, "Oil, Olive oil, Vinegar")
+    + _group("Pantry", "L", 365, 0.25, "Soy sauce, Chili sauce, Ketchup, Teriyaki sauce, Coconut milk, "
+             "Honey, Tahini, Vegetable stock")
+    + _group("Pantry", "kg", 180, 0.2, "Tomato puree, Pesto, Green curry paste, Salsa, Pickle, "
+             "Ginger garlic paste")
+    + _group("Pantry", "kg", 365, 0.1, "Cumin, Turmeric, Garam masala, Red chili powder, Paprika, "
+             "Cinnamon, Cardamom, Mustard seeds, Za'atar, Sumac, Chili flakes, Oregano, Black pepper, "
+             "Yeast, Baking powder")
+    + _group("Pantry", "pcs", 365, 2, "Baked beans, Chopped tomatoes")
+    + _group("Pantry", "kg", 365, 1, "Salt, Sugar")
+    # ---------------------------------------------------------------- DRY GOODS (pulses, nuts, dried fruit)
+    + _group("Dry goods", "kg", 365, 0.5, "Lentils, Moong dal, Kidney beans, Chickpeas, Black beans, "
+             "Fava beans, Peanuts, Cashews, Raisins, Dates, Tortilla chips")
+)
+
+# Fast lookup: lower-case name -> (name, info).
+_BY_NAME = {name.lower(): (name, info) for name, info in CATALOG}
 
 
 # ----------------------------------------------------------------------------------------------
@@ -89,9 +125,30 @@ def food_type(name):
 
 
 def info_for(name):
-    """Return (unit, category) for a known ingredient, or None if we don't know it."""
-    hit = _BY_NAME.get(str(name).strip().lower())
-    return (hit[1], hit[2]) if hit else None
+    """IngredientInfo(unit, tag, shelf_days, default_qty) for a known ingredient, or None.
+
+    Also finds plurals and other spellings ("Tomatoes", "curd", "capsicum") through the same name
+    matching the recipes use (units.normalize_name).
+    """
+    key = str(name).strip().lower()
+    if key in _BY_NAME:
+        return _BY_NAME[key][1]
+    from app.units import normalize_name                  # local import avoids a circular import
+    wanted = normalize_name(key)
+    for known, (_, info) in _BY_NAME.items():
+        if normalize_name(known) == wanted:
+            return info
+    return None
+
+
+def guess_info(name):
+    """Like info_for, but never None: unknown meat names get the Meat tag, everything else UNKNOWN."""
+    info = info_for(name)
+    if info is not None:
+        return info
+    if food_type(name) == "nonveg":                       # e.g. "Turkey breast"
+        return IngredientInfo("kg", "Meat", 2, 0.5)
+    return UNKNOWN
 
 
 def suggest(text, extra_names=(), limit=6):
@@ -104,7 +161,7 @@ def suggest(text, extra_names=(), limit=6):
     if len(text) < 2:                                    # 1 letter matches too much to be useful
         return []
     names, seen = [], set()
-    for name in [n for n, _, _ in CATALOG] + [str(e).strip() for e in extra_names]:
+    for name in [n for n, _ in CATALOG] + [str(e).strip() for e in extra_names]:
         key = name.lower()
         if key and key not in seen:                     # skip duplicates (catalog + user names)
             seen.add(key)

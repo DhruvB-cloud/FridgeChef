@@ -99,22 +99,46 @@ def fetch_catalog():
     return str(body.get("version", "")), recipes
 
 
-def download_missing_images(recipes):
-    """Fetch pictures that are neither bundled in the app nor cached yet (runs in the background)."""
+def _save_picture(name, small):
+    """Download one picture (small=True: the 256 px thumbnail) into the cache folder. True if saved."""
     folder = cache_dir()
-    if not folder:
-        return
+    if not folder or not SAFE_IMAGE_NAME.fullmatch(name):   # no cache yet, or an odd name like "../x"
+        return False
+    if small:
+        folder = os.path.join(folder, "thumbs")
+        os.makedirs(folder, exist_ok=True)
+    try:
+        data = _download(f"{IMAGES_URL}/{'thumbs/' if small else ''}{name}", MAX_IMAGE_BYTES)
+    except CatalogError:
+        return False                                      # no picture -> a placeholder colour is shown
+    with open(os.path.join(folder, name), "wb") as out:
+        out.write(data)
+    return True
+
+
+def download_missing_images(recipes):
+    """Fetch THUMBNAILS the phone doesn't have yet (background). 5.0: ~20 KB each, so even 80 new
+    recipes cost under 2 MB; the big photo is only fetched when a recipe is opened (fetch_full_photo)."""
     for recipe in recipes:
         path = recipe.image_path or ""
-        name = path[len("asset:"):] if path.startswith("asset:") else ""
-        if not SAFE_IMAGE_NAME.fullmatch(name) or resolve_image(path) is not None:
-            continue                                      # odd name, or we already have it
-        try:
-            data = _download(f"{IMAGES_URL}/{name}", MAX_IMAGE_BYTES)
-        except CatalogError:
-            continue                                      # no picture -> a placeholder colour is shown
-        with open(os.path.join(folder, name), "wb") as out:
-            out.write(data)
+        if path.startswith("asset:") and resolve_image(path, small=True) is None:
+            _save_picture(path[len("asset:"):], small=True)
+
+
+def fetch_full_photo(image_path, on_done):
+    """The recipe page needs the big photo but only a thumbnail (or nothing) is on the phone:
+    download it in the background, then call on_done(path) - FROM THE BACKGROUND THREAD."""
+    if not (image_path or "").startswith("asset:"):
+        return
+    name = image_path[len("asset:"):]
+    current = resolve_image(image_path)
+    if current and os.path.basename(os.path.dirname(current)) != "thumbs":
+        return                                            # the big photo is already here
+
+    def work():
+        if _save_picture(name, small=False):
+            on_done(resolve_image(image_path))
+    threading.Thread(target=work, daemon=True).start()
 
 
 def sync_if_due(db, on_done, force=False):

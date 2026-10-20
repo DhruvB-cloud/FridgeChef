@@ -18,7 +18,7 @@ from typing import List, Optional           # type hints, purely for readability
 MEAL_TYPES = ["Breakfast", "Brunch", "Lunch", "Snacks", "Dinner"]
 
 # Cuisines a recipe can belong to (used by the cuisine filter).
-CUISINES = ["Indian", "Arabic", "English"]
+CUISINES = ["Indian", "Arabic", "English", "Italian", "Asian", "Mexican"]   # 5.0: three more
 
 # Nutritional tags a recipe can carry (used by the nutrition filter).
 NUTRITION_TAGS = ["High Protein", "Low Carb", "Low Calorie", "High Fiber", "Balanced"]
@@ -66,18 +66,19 @@ def slugify(text):
     return text.strip("-") or "recipe"                      # no leading/trailing dashes
 
 
-def guess_container(name, unit):
-    """A sensible first choice for the container picker (the user can always change it).
+def guess_container(name, unit, tag=None):
+    """The container the fridge drawing shows for an item (version 5.0: always picked automatically).
 
-    "Leftover dal" -> dish, "Soy sauce" in ml -> bottle, everything else -> jar.
-    Also used for items saved before version 4.1, which have no container yet.
+    "Leftover dal" -> dish, liquids -> bottle (milk -> carton), then by tag: fresh produce -> greens
+    basket, meat / frozen -> food box, bakery -> basket, grain / pantry / dry goods -> jar.
     """
     words = re.findall(r"[a-z]+", str(name).lower())        # "Rice (uncooked)" -> ["rice", "uncooked"]
     if any(word in DISH_WORDS for word in words):           # whole words only: "uncooked" is not "cooked"
         return "dish"
-    if unit in ("ml", "l"):                                 # liquids
-        return "bottle"
-    return "jar"
+    if unit in ("ml", "l", "L"):                            # liquids
+        return "carton" if "milk" in words else "bottle"
+    return {"Fresh produce": "greens", "Meat": "box", "Frozen": "box",
+            "Bakery": "basket"}.get(tag, "jar")
 
 
 @dataclass
@@ -85,11 +86,12 @@ class PantryItem:
     """One thing the user owns, e.g. '500 g Curd, in the Fridge, expires 2026-10-06'."""
     name: str                          # display name exactly as the user typed it
     quantity: float                    # how much is left
-    unit: str                          # one of units.UNIT_CHOICES
+    unit: str                          # 5.0: kg, pcs or L (ingredient_catalog.FRIDGE_UNITS)
     category: str = "Fridge"           # "Fridge" or "Outside"
     expiry: Optional[date] = None      # None means "does not expire" (e.g. salt)
     id: Optional[int] = None           # database primary key (None until saved)
     container: Optional[str] = None    # "bottle" / "jar" / "dish" (None = guess from name and unit)
+    tag: Optional[str] = None          # 5.0: Fresh produce / Meat / Bakery / Frozen / Grain / Pantry / Dry goods
 
     @property
     def is_water(self):
@@ -98,7 +100,7 @@ class PantryItem:
 
     def kept_in(self):
         """The container to draw: the user's choice, or a guess for older items."""
-        return self.container if self.container in CONTAINERS else guess_container(self.name, self.unit)
+        return self.container if self.container in CONTAINERS else guess_container(self.name, self.unit, self.tag)
 
     def days_left(self, today=None):
         """Days until expiry: 0 = expires today, negative = already expired, None = never."""

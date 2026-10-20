@@ -31,6 +31,7 @@ from datetime import date, datetime           # for expiry dates and timestamps
 from app.models import APPLIANCES, UNLIMITED, WATER_NAME, Ingredient, PantryItem, Recipe   # our data shapes
 from app.seed_recipes import SEED_RECIPES                            # the starter recipe library
 from app.units import ZERO_BELOW                                      # below this = used up (4.7.1)
+from app.ingredient_catalog import guess_info                         # unit / tag / shelf life (5.0)
 
 # SQL that creates every table if it does not exist yet. Running it on every start is safe.
 SCHEMA = """
@@ -96,7 +97,8 @@ MIGRATIONS = {
                 ("carbs_g", "REAL NOT NULL DEFAULT 0"), ("calories", "REAL NOT NULL DEFAULT 0"),
                 ("custom_image", "TEXT")],                           # the user's own photo: version 4.7
     "cook_log": [("recipe_name", "TEXT"), ("photo_path", "TEXT")],   # photo_path: version 4
-    "pantry_items": [("container", "TEXT")],                         # bottle / jar / dish: version 4.1
+    "pantry_items": [("container", "TEXT"),                          # bottle / jar / dish: version 4.1
+                     ("tag", "TEXT")],                               # Fresh produce / Meat / ...: version 5.0
 }
 
 
@@ -131,6 +133,16 @@ class Database:
         # Old cook_log rows have no recipe_name: copy it from the recipes table.
         self.conn.execute("UPDATE cook_log SET recipe_name = (SELECT name FROM recipes "
                           "WHERE recipes.id = cook_log.recipe_id) WHERE recipe_name IS NULL")
+        # Version 5.0: the Fridge only uses kg, pcs and L. Convert older items once (the WHERE part
+        # makes this a no-op afterwards). factor = how many kg / L / pcs one old unit is.
+        for old, new, factor in (("g", "kg", 0.001), ("ml", "L", 0.001), ("l", "L", 1),
+                                 ("tsp", "L", 0.005), ("tbsp", "L", 0.015), ("cup", "L", 0.24),
+                                 ("bunch", "pcs", 1)):
+            self.conn.execute("UPDATE pantry_items SET unit=?, quantity=round(quantity * ?, 3) WHERE unit=?",
+                              (new, factor, old))
+        # ...and every item gets a tag: from the ingredient catalogue, or a sensible guess.
+        for row in self.conn.execute("SELECT id, name FROM pantry_items WHERE tag IS NULL").fetchall():
+            self.conn.execute("UPDATE pantry_items SET tag=? WHERE id=?", (guess_info(row["name"]).tag, row["id"]))
         # Old user recipes have no uid: give each a random one.
         for row in self.conn.execute("SELECT id FROM recipes WHERE uid IS NULL AND is_user=1").fetchall():
             self.conn.execute("UPDATE recipes SET uid=? WHERE id=?", (f"user-{uuid.uuid4().hex[:12]}", row["id"]))
@@ -165,12 +177,12 @@ class Database:
                                  "ORDER BY id").fetchall()
         if not rows:                                       # new database (or an old one without water)
             self.conn.execute("INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on, "
-                              "container) VALUES (?, 'Fridge', ?, 'l', NULL, ?, 'bottle')",
+                              "container, tag) VALUES (?, 'Fridge', ?, 'L', NULL, ?, 'bottle', 'Pantry')",
                               (WATER_NAME, UNLIMITED, datetime.now().isoformat()))
             return
         for row in rows[1:]:                               # water added twice by an older version
             self.conn.execute("DELETE FROM pantry_items WHERE id=?", (row["id"],))
-        self.conn.execute("UPDATE pantry_items SET name=?, category='Fridge', quantity=?, unit='l', "
+        self.conn.execute("UPDATE pantry_items SET name=?, category='Fridge', quantity=?, unit='L', "
                           "expiry=NULL, container='bottle' WHERE id=?",
                           (WATER_NAME, UNLIMITED, rows[0]["id"]))
 
@@ -191,6 +203,7 @@ class Database:
             # Stored as text 'YYYY-MM-DD'; turn it back into a date object (or keep None).
             expiry=date.fromisoformat(row["expiry"]) if row["expiry"] else None,
             container=row["container"],                    # None for items saved before version 4.1
+            tag=row["tag"],                                # Fresh produce / Meat / ... (version 5.0)
         )
 
     def list_pantry(self):
@@ -204,11 +217,11 @@ class Database:
     def add_pantry_item(self, item):
         """Insert a new pantry item and return its new id."""
         cur = self.conn.execute(
-            "INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on, container) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",                # '?' placeholders prevent SQL injection
+            "INSERT INTO pantry_items(name, category, quantity, unit, expiry, added_on, container, tag) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",             # '?' placeholders prevent SQL injection
             (item.name.strip(), item.category, float(item.quantity), item.unit,
              item.expiry.isoformat() if item.expiry else None, datetime.now().isoformat(),
-             item.container),
+             item.container, item.tag or guess_info(item.name).tag),
         )
         self.conn.commit()                                 # write to disk immediately
         item.id = cur.lastrowid                            # the id SQLite just generated
@@ -217,10 +230,11 @@ class Database:
     def update_pantry_item(self, item):
         """Overwrite an existing pantry item (used by the Edit popup)."""
         self.conn.execute(
-            "UPDATE pantry_items SET name=?, category=?, quantity=?, unit=?, expiry=?, container=? "
+            "UPDATE pantry_items SET name=?, category=?, quantity=?, unit=?, expiry=?, container=?, tag=? "
             "WHERE id=?",
             (item.name.strip(), item.category, float(item.quantity), item.unit,
-             item.expiry.isoformat() if item.expiry else None, item.container, item.id),
+             item.expiry.isoformat() if item.expiry else None, item.container,
+             item.tag or guess_info(item.name).tag, item.id),
         )
         self.conn.commit()
 

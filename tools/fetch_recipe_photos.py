@@ -18,6 +18,15 @@ HOW TO USE IT (from the FridgeChef folder):
     2. Write the chosen file name of each recipe into tools/recipe_photos.json
     3. Download the chosen photos, crop them square and write the credits:
            .\.venv\Scripts\python tools\fetch_recipe_photos.py fetch
+
+    VERSION 5.0 (80 more recipes):
+           .\.venv\Scripts\python tools\fetch_recipe_photos.py auto
+       picks the FIRST suitable photo for every recipe that has no choice yet, adds it to
+       recipe_photos.json and makes review sheets (F:\Temp\recipe-photos\review-*.jpg). Bad picks
+       can then be replaced by hand in recipe_photos.json before running "fetch".
+       "fetch" only downloads photos that are missing. The first 21 recipes' photos are bundled in
+       the APK (assets/recipe_images); the newer ones go to assets/catalog_photos, which phones
+       download from GitHub Pages instead (keeps the APK small).
 """
 
 import html                                        # turns "&amp;" back into "&"
@@ -34,7 +43,7 @@ import certifi                                     # ...with an up-to-date list 
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.images import RECIPE_IMAGES_DIR           # noqa: E402  where the app's recipe pictures live
+from app.images import CATALOG_PHOTOS_DIR, RECIPE_IMAGES_DIR   # noqa: E402  where recipe pictures live
 from app.seed_recipes import SEED_RECIPES          # noqa: E402  the built-in recipes
 
 API = "https://commons.wikimedia.org/w/api.php"    # Wikimedia Commons' public search API
@@ -133,23 +142,71 @@ def _square(photo, focus_y=0.5):
     return photo.crop((left, top, left + side, top + side)).resize((SIZE, SIZE), Image.LANCZOS)
 
 
+BUNDLED = {r.uid for r in SEED_RECIPES[:21]}       # the first 21 recipes' photos live inside the APK
+
+
+def folder_for(uid):
+    """assets/recipe_images for the 21 bundled photos, assets/catalog_photos for the rest."""
+    return RECIPE_IMAGES_DIR if uid in BUNDLED else CATALOG_PHOTOS_DIR
+
+
+def auto():
+    """5.0: choose the first suitable photo for every recipe without a choice, and make review sheets."""
+    with open(CHOICES, encoding="utf-8") as f:
+        choices = json.load(f)
+    os.makedirs(SHEETS_DIR, exist_ok=True)
+    font = ImageFont.truetype(os.path.join(os.path.dirname(RECIPE_IMAGES_DIR), "fonts", "Poppins-SemiBold.ttf"), 16)
+    picked = []
+    for recipe in SEED_RECIPES:
+        if recipe.uid in choices:
+            continue
+        found = candidates(SEARCH.get(recipe.uid, recipe.name), limit=1)
+        if not found:
+            print(f"{recipe.uid:30} NO free photo found - choose one by hand")
+            continue
+        choices[recipe.uid] = {"file": found[0]["file"], "focus_y": 0.5}
+        picked.append((recipe.uid, found[0]))
+        print(f"{recipe.uid:30} {found[0]['file'][:60]}")
+    with open(CHOICES, "w", encoding="utf-8") as f:
+        json.dump(choices, f, indent=2, ensure_ascii=False)
+    for n in range(0, len(picked), 20):                # review sheets: 20 photos each (5 x 4)
+        sheet = Image.new("RGB", (5 * 230, 4 * 250), "white")
+        d = ImageDraw.Draw(sheet)
+        for i, (uid, c) in enumerate(picked[n:n + 20]):
+            photo = Image.open(io.BytesIO(_get(url=c["thumb"]))).convert("RGB")
+            photo.thumbnail((220, 220))
+            x, y = (i % 5) * 230 + 5, (i // 5) * 250 + 5
+            sheet.paste(photo, (x, y))
+            d.text((x, y + 222), uid[:26], font=font, fill="black")
+        sheet.save(os.path.join(SHEETS_DIR, f"review-{n // 20 + 1}.jpg"), quality=85)
+
+
 def fetch():
-    """Step 3: download the chosen photos, crop them square, save picture + thumbnail + credits."""
+    """Step 3: download the chosen photos that are missing, crop them square, save picture + thumbnail.
+
+    Credits are ADDED to assets/recipe_images/credits.json (one file for all photos - the app reads it).
+    """
     with open(CHOICES, encoding="utf-8") as f:
         choices = json.load(f)                     # uid -> {"file": "File:....jpg", "focus_y": 0.5}
-    os.makedirs(os.path.join(RECIPE_IMAGES_DIR, "thumbs"), exist_ok=True)
     credits = {}
+    if os.path.exists(CREDITS):
+        with open(CREDITS, encoding="utf-8") as f:
+            credits = json.load(f)                 # keep the credits we already have
     for uid, choice in choices.items():
+        folder = folder_for(uid)
+        if os.path.exists(os.path.join(folder, f"{uid}.jpg")) and uid in credits:
+            continue                               # already downloaded
+        os.makedirs(os.path.join(folder, "thumbs"), exist_ok=True)
         data = json.loads(_get({"action": "query", "format": "json", "titles": choice["file"],
                                 "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": 1200}))
         info = next(iter(data["query"]["pages"].values()))["imageinfo"][0]
         meta = info.get("extmetadata", {})
         photo = Image.open(io.BytesIO(_get(url=info["thumburl"]))).convert("RGB")
         picture = _square(photo, choice.get("focus_y", 0.5))
-        picture.save(os.path.join(RECIPE_IMAGES_DIR, f"{uid}.jpg"), "JPEG", quality=86)
+        picture.save(os.path.join(folder, f"{uid}.jpg"), "JPEG", quality=86)
         thumb = picture.copy()
         thumb.thumbnail((256, 256), Image.LANCZOS)   # the small copy for lists
-        thumb.save(os.path.join(RECIPE_IMAGES_DIR, "thumbs", f"{uid}.jpg"), "JPEG", quality=85)
+        thumb.save(os.path.join(folder, "thumbs", f"{uid}.jpg"), "JPEG", quality=85)
         artist = _plain(meta.get("Artist", {}).get("value", ""))
         author = artist.splitlines()[0].strip() if artist else ""   # first line = the name (no notes)
         credits[uid] = {"author": author or "Unknown",
@@ -162,4 +219,4 @@ def fetch():
 
 
 if __name__ == "__main__":
-    {"search": search, "fetch": fetch}[sys.argv[1] if len(sys.argv) > 1 else "search"]()
+    {"search": search, "fetch": fetch, "auto": auto}[sys.argv[1] if len(sys.argv) > 1 else "search"]()

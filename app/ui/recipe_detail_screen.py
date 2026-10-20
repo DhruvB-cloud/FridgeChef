@@ -16,6 +16,7 @@ WHY THIS FILE EXISTS:
 import os
 from datetime import datetime                      # time stamp in share card file names
 
+from kivy.clock import Clock                      # hop back to the UI thread after a download
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.checkbox import CheckBox
@@ -23,6 +24,7 @@ from kivy.uix.image import Image                    # shows the finished recipe 
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen
 
+from app.catalog import fetch_full_photo           # 5.0: big photo on demand
 from app.images import photo_credit, resolve_image
 from app.ui.image_picker import import_image, pick_image   # "Change photo"
 from app.recipe_card import create_recipe_card
@@ -118,8 +120,11 @@ class RecipeDetailScreen(Screen):
         c.clear_widgets()
 
         # --- photo (every recipe has one: bundled, downloaded, own photo or generated)
-        c.add_widget(RoundImage(resolve_image(recipe.picture), radius=dp(26),
-                                size_hint_y=None, height=dp(210)))
+        photo = RoundImage(resolve_image(recipe.picture), radius=dp(26), size_hint_y=None, height=dp(210))
+        c.add_widget(photo)
+        # 5.0: newer recipes' big photos are downloaded only when you open them (thumbnail meanwhile).
+        fetch_full_photo(recipe.picture, lambda path: Clock.schedule_once(   # back to the UI thread
+            lambda dt: photo.set_source(path) if self.recipe is recipe else None))
         c.add_widget(self._photo_row(recipe))            # credit + "Change photo" (version 4.7)
 
         # --- chips

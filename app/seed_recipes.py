@@ -279,8 +279,15 @@ NUTRITION = {
     "Cheese Toastie": (16, 30, 380),
 }
 
-# Give every built-in recipe its stable uid, its default picture and its nutrition numbers.
+# Give the first 21 recipes their nutrition numbers from the table above.
+for _recipe in SEED_RECIPES:
+    _recipe.protein_g, _recipe.carbs_g, _recipe.calories = NUTRITION.get(_recipe.name, (0, 0, 0))
+
+# Version 5.0: 80 more recipes (they carry their nutrition numbers themselves) - 101 in total.
+from app.recipes_more import MORE_RECIPES                  # noqa: E402  (after the table on purpose)
+SEED_RECIPES.extend(MORE_RECIPES)
+
+# Give every built-in recipe its stable uid and its picture's file name.
 for _recipe in SEED_RECIPES:
     _recipe.uid = slugify(_recipe.name)                    # e.g. "dal-tadka"
     _recipe.image_path = f"asset:{_recipe.uid}.jpg"        # assets/recipe_images/dal-tadka.jpg
-    _recipe.protein_g, _recipe.carbs_g, _recipe.calories = NUTRITION.get(_recipe.name, (0, 0, 0))

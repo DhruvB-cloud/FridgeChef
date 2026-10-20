@@ -145,5 +145,565 @@
     "licence_url": "",
     "source": "https://commons.wikimedia.org/wiki/File:Grilled_cheese_sandwiches.jpg",
     "file": "File:Grilled cheese sandwiches.jpg"
+  },
+  "palak-paneer": {
+    "author": "Lopanayak",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Palakpaneer_Rayagada_Odisha_0009.jpg",
+    "file": "File:Palakpaneer Rayagada Odisha 0009.jpg"
+  },
+  "butter-chicken": {
+    "author": "stu_spivack",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Chicken_makhani.jpg",
+    "file": "File:Chicken makhani.jpg"
+  },
+  "aloo-gobi": {
+    "author": "TabassumJawed",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Aloo_Gobi_Sabzi.jpg",
+    "file": "File:Aloo Gobi Sabzi.jpg"
+  },
+  "upma": {
+    "author": "Intodustin",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Upma_South_India.JPG",
+    "file": "File:Upma South India.JPG"
+  },
+  "masala-dosa": {
+    "author": "Marajozkee",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Masala_dosa_01.jpg",
+    "file": "File:Masala dosa 01.jpg"
+  },
+  "egg-curry": {
+    "author": "https://onlybestrecipes.com/egg-curry-recipeegg-curry-recipe/",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Spicy_Anda_Curry.jpg",
+    "file": "File:Spicy Anda Curry.jpg"
+  },
+  "matar-paneer": {
+    "author": "Mdsmds0",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Matar-Paneer.JPG",
+    "file": "File:Matar-Paneer.JPG"
+  },
+  "baingan-bharta": {
+    "author": "Zeel Patel",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Baingan_Ka_Bharta.JPG",
+    "file": "File:Baingan Ka Bharta.JPG"
+  },
+  "khichdi": {
+    "author": "Seena.ge",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Spicy_Khichdi.JPG",
+    "file": "File:Spicy Khichdi.JPG"
+  },
+  "lemon-rice": {
+    "author": "Ganesh Gore",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Lemon_Rice_in_Kerala.jpg",
+    "file": "File:Lemon Rice in Kerala.jpg"
+  },
+  "curd-rice": {
+    "author": "Suyash Dwivedi",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Curd_rice_in_ICH_Bhopal.jpg",
+    "file": "File:Curd rice in ICH Bhopal.jpg"
+  },
+  "besan-chilla": {
+    "author": "Kamalsahansi",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Chilla_besan.JPG",
+    "file": "File:Chilla besan.JPG"
+  },
+  "aloo-paratha": {
+    "author": "Gannu03",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Aloo_Paratha_(96238).jpg",
+    "file": "File:Aloo Paratha (96238).jpg"
+  },
+  "chicken-biryani": {
+    "author": "Subhrajyoti07",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:A_home_made_plate_of_mutton_biryani_served_with_chicken_kassa_cooked_in_the_bengali_style.jpg",
+    "file": "File:A home made plate of mutton biryani served with chicken kassa cooked in the bengali style.jpg"
+  },
+  "fish-curry": {
+    "author": "Kalakki at Malayalam Wikipedia",
+    "licence": "CC BY-SA 2.5",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.5",
+    "source": "https://commons.wikimedia.org/wiki/File:Meen_curry_2.JPG",
+    "file": "File:Meen curry 2.JPG"
+  },
+  "sooji-halwa": {
+    "author": "Mdsmds0",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Sooji_Halwa_(Semolina_Pudding).JPG",
+    "file": "File:Sooji Halwa (Semolina Pudding).JPG"
+  },
+  "rice-kheer": {
+    "author": "Miansari66",
+    "licence": "Public domain",
+    "licence_url": "",
+    "source": "https://commons.wikimedia.org/wiki/File:Kheer_Special.JPG",
+    "file": "File:Kheer Special.JPG"
+  },
+  "pav-bhaji": {
+    "author": "Rishika Palvankar",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Pav_Bhaji.jpg",
+    "file": "File:Pav Bhaji.jpg"
+  },
+  "methi-thepla": {
+    "author": "Rupasree",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Masala_thepla_with_Methi_kela.JPG",
+    "file": "File:Masala thepla with Methi kela.JPG"
+  },
+  "falafel": {
+    "author": "Miansari66",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Falafel_1.JPG",
+    "file": "File:Falafel 1.JPG"
+  },
+  "baba-ganoush": {
+    "author": "Basel15 at English Wikipedia",
+    "licence": "Public domain",
+    "licence_url": "",
+    "source": "https://commons.wikimedia.org/wiki/File:Baba_Ghanoush.jpg",
+    "file": "File:Baba Ghanoush.jpg"
+  },
+  "foul-medames": {
+    "author": "Miansari66",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Ful_Medames.JPG",
+    "file": "File:Ful Medames.JPG"
+  },
+  "manakish-za-atar": {
+    "author": "Nsaum75",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Israeli_zaatar_manakeesh.jpg",
+    "file": "File:Israeli zaatar manakeesh.jpg"
+  },
+  "chicken-kabsa": {
+    "author": "Bhj028",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Chicken_Kabsa.jpg",
+    "file": "File:Chicken Kabsa.jpg"
+  },
+  "kofta-kebab": {
+    "author": "Lesya Dolyk",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Lula_kebab_2.jpg",
+    "file": "File:Lula kebab 2.jpg"
+  },
+  "musakhan": {
+    "author": "Tom Bahar",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Musakhan_served_in_Jerusalem,_Israel.jpg",
+    "file": "File:Musakhan served in Jerusalem, Israel.jpg"
+  },
+  "om-ali": {
+    "author": "روتانا",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Traditional_Om_Ali_Dessert_Served_Warm_with_Nuts.jpg",
+    "file": "File:Traditional Om Ali Dessert Served Warm with Nuts.jpg"
+  },
+  "full-english-breakfast": {
+    "author": "Peachyeung316",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Full_Breakfast_Set_of_Breakfast_from_FOOD2_by_Maxims.jpg",
+    "file": "File:Full Breakfast Set of Breakfast from FOOD2 by Maxims.jpg"
+  },
+  "fish-and-chips": {
+    "author": "Grendelkhan",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Fish_and_chips_plate_with_peas.jpg",
+    "file": "File:Fish and chips plate with peas.jpg"
+  },
+  "shepherd-s-pie": {
+    "author": "Abhinaba Basu from Redmond, United States",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Shepherd%27s_pie_(22470901009).jpg",
+    "file": "File:Shepherd's pie (22470901009).jpg"
+  },
+  "bangers-and-mash": {
+    "author": "Qwerty Binary",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Irish_bangers_and_mash.jpg",
+    "file": "File:Irish bangers and mash.jpg"
+  },
+  "beans-on-toast": {
+    "author": "Andy Li",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Beans_on_toast_-_Monty%27s_2025-12-05.jpg",
+    "file": "File:Beans on toast - Monty's 2025-12-05.jpg"
+  },
+  "leek-and-potato-soup": {
+    "author": "Andy Li",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Leek_%26_Potato_%2B_celeriac_soup.jpg",
+    "file": "File:Leek & Potato + celeriac soup.jpg"
+  },
+  "pancakes": {
+    "author": "Mae Mu",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Foodiesfeed.com_pouring-honey-on-pancakes-with-walnuts.jpg",
+    "file": "File:Foodiesfeed.com pouring-honey-on-pancakes-with-walnuts.jpg"
+  },
+  "egg-mayo-sandwich": {
+    "author": "T.Tseng",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Egg_salad,_scallion,_mayo,_dijon.jpg",
+    "file": "File:Egg salad, scallion, mayo, dijon.jpg"
+  },
+  "roast-chicken-and-vegetables": {
+    "author": "HaJunkiyada",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Liat_Portal_for_Foodie_Disorder_-_Roasted_chicken_with_vegetables_and_white_rice.jpg",
+    "file": "File:Liat Portal for Foodie Disorder - Roasted chicken with vegetables and white rice.jpg"
+  },
+  "ploughman-s-lunch": {
+    "author": "Glammmur",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:An_Elsecar_Ploughman%27s_Lunch.jpg",
+    "file": "File:An Elsecar Ploughman's Lunch.jpg"
+  },
+  "spaghetti-aglio-e-olio": {
+    "author": "Bairuilong",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Spaghetti_aglio_e_olio_KB.jpg",
+    "file": "File:Spaghetti aglio e olio KB.jpg"
+  },
+  "penne-arrabbiata": {
+    "author": "Petar Milošević",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Penne_Arrabbiata.jpg",
+    "file": "File:Penne Arrabbiata.jpg"
+  },
+  "spaghetti-bolognese": {
+    "author": "Andy Li",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Spaghetti_Bolognese_-_Figaros,_Brighton_2023-10-06.jpg",
+    "file": "File:Spaghetti Bolognese - Figaros, Brighton 2023-10-06.jpg"
+  },
+  "margherita-pizza": {
+    "author": "Mario56",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Margherita_Originale.JPG",
+    "file": "File:Margherita Originale.JPG"
+  },
+  "mushroom-risotto": {
+    "author": "DinaBenedettoFerrandina",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Risotto_con_Funghi_e_Piselli.jpg",
+    "file": "File:Risotto con Funghi e Piselli.jpg"
+  },
+  "caprese-salad": {
+    "author": "MOs810",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Insalata_Caprese_(from_Poznan).JPG",
+    "file": "File:Insalata Caprese (from Poznan).JPG"
+  },
+  "minestrone-soup": {
+    "author": "Katrin Morenz from Aachen, Deutschland",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Minestrone_soup.jpg",
+    "file": "File:Minestrone soup.jpg"
+  },
+  "pasta-alfredo": {
+    "author": "Dllu",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Chicken_fettuccine_alfredo.JPG",
+    "file": "File:Chicken fettuccine alfredo.JPG"
+  },
+  "bruschetta": {
+    "author": "Patrickfarrugia",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:A_typical_Maltese_bruschetta_with_fresh_Mediterranean_ingredients.jpg",
+    "file": "File:A typical Maltese bruschetta with fresh Mediterranean ingredients.jpg"
+  },
+  "pesto-pasta": {
+    "author": "에그란",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Shrimp_and_basil_pesto_pasta_1.jpg",
+    "file": "File:Shrimp and basil pesto pasta 1.jpg"
+  },
+  "chicken-parmesan": {
+    "author": "Missvain",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Tony%27s_of_North_Beach_-_December_2022_-_Sarah_Stierch_05.jpg",
+    "file": "File:Tony's of North Beach - December 2022 - Sarah Stierch 05.jpg"
+  },
+  "lasagne": {
+    "author": "jules / stonesoup",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Lasagne_-_stonesoup.jpg",
+    "file": "File:Lasagne - stonesoup.jpg"
+  },
+  "egg-fried-rice": {
+    "author": "Gaurav Dhwaj Khadka",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Egg_Fried_Rice.jpg",
+    "file": "File:Egg Fried Rice.jpg"
+  },
+  "hakka-noodles": {
+    "author": "SGUae",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Tasty_hakka_noodles_image.jpg",
+    "file": "File:Tasty hakka noodles image.jpg"
+  },
+  "chilli-paneer": {
+    "author": "Marajozkee",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Chilly_Paneer_01.jpg",
+    "file": "File:Chilly Paneer 01.jpg"
+  },
+  "gobi-manchurian": {
+    "author": "Yakshitha",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:%E0%B2%97%E0%B3%8B%E0%B2%AC%E0%B2%BF_%E0%B2%AE%E0%B2%82%E0%B2%9A%E0%B3%81%E0%B2%B0%E0%B2%BF.jpg",
+    "file": "File:ಗೋಬಿ ಮಂಚುರಿ.jpg"
+  },
+  "pad-thai": {
+    "author": "Takeaway",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Phat_Thai_kung_Chang_Khien_street_stall.jpg",
+    "file": "File:Phat Thai kung Chang Khien street stall.jpg"
+  },
+  "thai-green-curry": {
+    "author": "Takeaway",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Thai_green_chicken_curry_and_roti.jpg",
+    "file": "File:Thai green chicken curry and roti.jpg"
+  },
+  "teriyaki-chicken": {
+    "author": "Daderot",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Chicken_teriyaki_bento_box_-_Massachusetts.jpg",
+    "file": "File:Chicken teriyaki bento box - Massachusetts.jpg"
+  },
+  "hot-and-sour-soup": {
+    "author": "Evan-Amos",
+    "licence": "Public domain",
+    "licence_url": "",
+    "source": "https://commons.wikimedia.org/wiki/File:Hot-and-Sour-Soup-Bowl.jpg",
+    "file": "File:Hot-and-Sour-Soup-Bowl.jpg"
+  },
+  "vegetable-spring-rolls": {
+    "author": "Srujanabotcha",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Golden_Vegetable_Spring_Rolls_Served_with_Dipping_Sauce.jpg",
+    "file": "File:Golden Vegetable Spring Rolls Served with Dipping Sauce.jpg"
+  },
+  "chicken-stir-fry": {
+    "author": "jeffreyw",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Noodle_stir_fry_with_chicken,_shrimp,_and_broccoli_(18471621051).jpg",
+    "file": "File:Noodle stir fry with chicken, shrimp, and broccoli (18471621051).jpg"
+  },
+  "sweet-and-sour-chicken": {
+    "author": "Miansari66",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Sweet_and_Sour_Chicken.JPG",
+    "file": "File:Sweet and Sour Chicken.JPG"
+  },
+  "chicken-quesadilla": {
+    "author": "Daderot",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Chicken_quesadilla_-_Massachusetts.jpg",
+    "file": "File:Chicken quesadilla - Massachusetts.jpg"
+  },
+  "bean-burrito": {
+    "author": "Vegan Feast Catering",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Pinto_Bean_and_Spinach_Burrito_(5034780791).jpg",
+    "file": "File:Pinto Bean and Spinach Burrito (5034780791).jpg"
+  },
+  "guacamole": {
+    "author": "Nikodem Nijaki",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Guacamole_IMGP1271.jpg",
+    "file": "File:Guacamole IMGP1271.jpg"
+  },
+  "nachos": {
+    "author": "chee.hong from Kuala Lumpur, Malaysia",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Nachos-cheese_(cropped).jpg",
+    "file": "File:Nachos-cheese (cropped).jpg"
+  },
+  "chicken-tacos": {
+    "author": "T.Tseng",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Tacos_al_pastor.jpg",
+    "file": "File:Tacos al pastor.jpg"
+  },
+  "mexican-rice": {
+    "author": "Maryam S.",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Mexican_rice_and_beans.jpg",
+    "file": "File:Mexican rice and beans.jpg"
+  },
+  "black-bean-soup": {
+    "author": "J Doll",
+    "licence": "CC BY 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Black_Bean_Soup_(140491813).jpeg",
+    "file": "File:Black Bean Soup (140491813).jpeg"
+  },
+  "huevos-rancheros": {
+    "author": "1000b",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Huevos_rancheros.jpg",
+    "file": "File:Huevos rancheros.jpg"
+  },
+  "burrito-bowl": {
+    "author": "Missvain",
+    "licence": "CC BY 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Steak_burrito_bowl_at_La_Casa_Restaurant_in_Sonoma,_California_-_Sarah_Stierch_03.jpg",
+    "file": "File:Steak burrito bowl at La Casa Restaurant in Sonoma, California - Sarah Stierch 03.jpg"
+  },
+  "chana-masala": {
+    "author": "Gaurav Dhwaj Khadka",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Chole_Bhature_1.jpg",
+    "file": "File:Chole Bhature 1.jpg"
+  },
+  "tomato-rice": {
+    "author": "Upendra Kanda",
+    "licence": "CC BY 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Tomato_Rice_up-close_(1862224148).jpg",
+    "file": "File:Tomato Rice up-close (1862224148).jpg"
+  },
+  "tabbouleh": {
+    "author": "cyclonebill",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Flickr_-_cyclonebill_-_Tabbouleh.jpg",
+    "file": "File:Flickr - cyclonebill - Tabbouleh.jpg"
+  },
+  "shorbat-adas": {
+    "author": "Andy Li",
+    "licence": "CC0",
+    "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "source": "https://commons.wikimedia.org/wiki/File:Homemade_Lentil_Soup_-_Lavash_2025-02-10.jpg",
+    "file": "File:Homemade Lentil Soup - Lavash 2025-02-10.jpg"
+  },
+  "fatteh": {
+    "author": "رؤى شاهين",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Hummos_Fatteh.jpg",
+    "file": "File:Hummos Fatteh.jpg"
+  },
+  "vegetable-fried-rice": {
+    "author": "Ganesh Mohan T",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Kerala_vegetable_fried_rice_2.jpg",
+    "file": "File:Kerala vegetable fried rice 2.jpg"
+  },
+  "veggie-enchiladas": {
+    "author": "Dahyana Yasada R. R.",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Enchiladas_con_salsa_roja.jpg",
+    "file": "File:Enchiladas con salsa roja.jpg"
+  },
+  "rajma-chawal": {
+    "author": "Gaurav Nemade",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Rajma_Masala_(32081557778).jpg",
+    "file": "File:Rajma Masala (32081557778).jpg"
+  },
+  "bhindi-masala": {
+    "author": "Joli Rumi",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Bhindi_fry.jpg",
+    "file": "File:Bhindi fry.jpg"
+  },
+  "mango-lassi": {
+    "author": "JIP",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Mango_lassi_at_Everest_Dine_in_November_2022.jpg",
+    "file": "File:Mango lassi at Everest Dine in November 2022.jpg"
+  },
+  "labneh-toast": {
+    "author": "Kliek",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Hangop_bord.jpg",
+    "file": "File:Hangop bord.jpg"
   }
 }

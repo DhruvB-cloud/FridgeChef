@@ -68,7 +68,9 @@ class SuggestTest(unittest.TestCase):
 
     def test_user_names_and_info(self):
         self.assertIn("Grandma's masala", suggest("gran", extra_names=["Grandma's masala"]))
-        self.assertEqual(info_for("onion"), ("pcs", "Outside"))
+        info = info_for("onion")                         # 5.0: unit, tag, shelf life, usual amount
+        self.assertEqual((info.unit, info.tag), ("pcs", "Fresh produce"))
+        self.assertEqual(info_for("Tomatoes").unit, "pcs")   # plurals / other spellings found too
         self.assertEqual(suggest("o"), [])               # too short to be useful
 
 
@@ -188,7 +190,8 @@ class Version41Test(unittest.TestCase):
     def test_container_guess(self):
         from app.models import guess_container
         self.assertEqual(guess_container("Soy sauce", "ml"), "bottle")      # liquids -> bottle
-        self.assertEqual(guess_container("Milk", "l"), "bottle")
+        self.assertEqual(guess_container("Milk", "l"), "carton")           # 5.0: milk comes in a carton
+        self.assertEqual(guess_container("Soy sauce", "L"), "bottle")       # other liquids: bottle
         self.assertEqual(guess_container("Leftover dal", "cup"), "dish")    # cooked food -> dish
         self.assertEqual(guess_container("Rice (cooked)", "g"), "dish")
         self.assertEqual(guess_container("Rice (uncooked)", "g"), "jar")    # "uncooked" is not "cooked"
@@ -260,10 +263,13 @@ class Version47Test(unittest.TestCase):
     """Version 4.7: real food photos (with credits) and the user's own photo for any recipe."""
 
     def test_every_builtin_recipe_has_a_free_photo_with_credit(self):
-        from app.images import RECIPE_IMAGES_DIR, photo_credit
+        from app.images import CATALOG_PHOTOS_DIR, RECIPE_IMAGES_DIR, photo_credit
         from app.seed_recipes import SEED_RECIPES
-        for recipe in SEED_RECIPES:
-            self.assertTrue(os.path.exists(os.path.join(RECIPE_IMAGES_DIR, f"{recipe.uid}.jpg")), recipe.uid)
+        for i, recipe in enumerate(SEED_RECIPES):
+            # 5.0: the first 21 photos are bundled in the APK, the 80 newer ones are catalogue photos.
+            folder = RECIPE_IMAGES_DIR if i < 21 else CATALOG_PHOTOS_DIR
+            self.assertTrue(os.path.exists(os.path.join(folder, f"{recipe.uid}.jpg")), recipe.uid)
+            self.assertTrue(os.path.exists(os.path.join(folder, "thumbs", f"{recipe.uid}.jpg")), recipe.uid)
             credit = photo_credit(recipe.image_path)
             self.assertIsNotNone(credit, recipe.uid)                     # who took it...
             self.assertTrue(credit["author"] and len(credit["author"].splitlines()) == 1, recipe.uid)
@@ -365,6 +371,56 @@ class Version471Test(unittest.TestCase):
                 f.write(b"not a picture")
             with self.assertRaises(PhotoError):
                 import_image(junk, folder)
+
+
+class Version50Test(unittest.TestCase):
+    """5.0: 101 recipes, the ingredient catalogue (unit / tag / shelf life) and the kg-pcs-L fridge."""
+
+    def test_101_recipes_and_every_ingredient_is_in_the_catalogue(self):
+        from app.ingredient_catalog import FRIDGE_UNITS, TAGS, info_for
+        from app.units import ALWAYS_AVAILABLE, normalize_name
+        self.assertGreaterEqual(len(SEED_RECIPES), 100)
+        self.assertEqual(len({r.uid for r in SEED_RECIPES}), len(SEED_RECIPES))   # no duplicate ids
+        for recipe in SEED_RECIPES:
+            for ing in recipe.ingredients:
+                if normalize_name(ing.name) in ALWAYS_AVAILABLE:
+                    continue
+                info = info_for(ing.name)
+                self.assertIsNotNone(info, f"{recipe.name}: {ing.name}")
+                self.assertIn(info.unit, FRIDGE_UNITS)
+                self.assertIn(info.tag, TAGS)
+
+    def test_unknown_names_get_sensible_defaults(self):
+        from app.ingredient_catalog import guess_info
+        self.assertEqual(guess_info("Turkey breast").tag, "Meat")           # meat words -> Meat
+        self.assertEqual(guess_info("Mystery sauce").unit, "pcs")            # anything else
+        self.assertEqual(guess_info("Milk").unit, "L")
+
+    def test_old_fridge_items_move_to_kg_pcs_l_and_get_a_tag(self):
+        import sqlite3
+        from app.database import Database
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "old.db")
+            db = Database(path)
+            db.close()
+            raw = sqlite3.connect(path)                                     # pretend an old version wrote these
+            raw.execute("INSERT INTO pantry_items(name, category, quantity, unit, added_on) "
+                        "VALUES ('Paneer', 'Fridge', 500, 'g', '2026-10-01'), "
+                        "('Milk', 'Fridge', 1, 'l', '2026-10-01'), ('Mint', 'Fridge', 2, 'bunch', '2026-10-01')")
+            raw.execute("UPDATE pantry_items SET tag=NULL")
+            raw.commit()
+            raw.close()
+            db = Database(path)                                             # opening upgrades the file
+            items = {i.name: i for i in db.list_pantry()}
+            self.assertEqual((items["Paneer"].quantity, items["Paneer"].unit), (0.5, "kg"))
+            self.assertEqual((items["Milk"].quantity, items["Milk"].unit), (1, "L"))
+            self.assertEqual(items["Mint"].unit, "pcs")
+            self.assertEqual(items["Paneer"].tag, "Fresh produce")
+            self.assertEqual(items["Water"].unit, "L")
+            db.close()
+            db = Database(path)                                             # a second start changes nothing
+            self.assertEqual({i.name: i.quantity for i in db.list_pantry()}["Paneer"], 0.5)
+            db.close()
 
 
 class CatalogTest(unittest.TestCase):
