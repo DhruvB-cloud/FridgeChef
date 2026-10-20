@@ -61,7 +61,7 @@ CATALOG = (
     + _group("Meat", "kg", 2, 0.5, "Chicken, Lamb, Minced meat, Fish, Prawns")
     + _group("Meat", "pcs", 4, 6, "Chicken sausage")
     # ---------------------------------------------------------------- BAKERY
-    + _group("Bakery", "pcs", 4, 1, "Bread")
+    + _group("Bakery", "pcs", 4, 12, "Bread")              # counted in SLICES, like the recipes (QA 5.0)
     + _group("Bakery", "pcs", 4, 6, "Pita bread, Bread roll, Tortilla")
     # ---------------------------------------------------------------- FROZEN
     + _group("Frozen", "kg", 90, 0.5, "Frozen peas, Frozen mixed vegetables, Frozen berries")

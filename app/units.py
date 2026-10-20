@@ -119,6 +119,7 @@ ALIASES = {
     "mince": "minced meat",
     "keema": "minced meat",
     "chicken breast": "chicken",
+    "olive oil": "oil",        # QA 5.0: at home any cooking oil does - 17 recipes waited for olive oil
 }
 
 # Ingredients we assume every kitchen has, so recipes are never blocked by them.

@@ -418,6 +418,22 @@ class Version50Test(unittest.TestCase):
         self.assertEqual(meal_rank(dish("Breakfast"), "Dinner"), 1)       # after dinner comes breakfast
         self.assertEqual(meal_rank(dish(), "Lunch"), 5)                   # no meal type -> last
 
+    def test_qa_fixes_bread_olive_oil_and_unavailable_order(self):
+        # QA 5.0: a loaf is 12 slices; olive oil and oil are the same; Unavailable = fewest missing first.
+        from app.ingredient_catalog import info_for
+        from app.recipe_engine import RecipeMatch
+        from app.models import Ingredient, Recipe
+        from app.ui.recipes_screen import unavailable_rank
+        from app.units import normalize_name
+        self.assertEqual(info_for("Bread").default_qty, 12)
+        self.assertEqual(normalize_name("Olive oil"), normalize_name("Oil"))
+        dish = Recipe(name="x", cuisine="Indian", is_veg=True, prep_minutes=5, servings=1)
+        five_missing_uses_soon = RecipeMatch(recipe=dish, missing=[Ingredient("a", 1, "g")] * 5,
+                                             uses_expiring_soon=["Chicken"])
+        one_missing = RecipeMatch(recipe=dish, missing=[Ingredient("a", 1, "g")])
+        ordered = sorted([five_missing_uses_soon, one_missing], key=unavailable_rank)
+        self.assertIs(ordered[0], one_missing)
+
     def test_dairy_and_spice_tags(self):
         from app.ingredient_catalog import info_for
         self.assertEqual(info_for("Milk").tag, "Dairy")

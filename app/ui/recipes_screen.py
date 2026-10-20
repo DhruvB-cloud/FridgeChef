@@ -60,6 +60,11 @@ def meal_rank(recipe, meal):
     return min(ranks) if ranks else len(MEAL_TYPES)        # no meal type at all -> last
 
 
+def unavailable_rank(match):
+    """Sort key for Unavailable: fewer missing ingredients first, then 'uses food expiring today/soon'."""
+    return (len(match.missing), not match.uses_expiring_today, not match.uses_expiring_soon)
+
+
 class ViewChip(ToggleButtonBehavior, Label):
     """One of the Available / Unavailable / Saved chips: white when off, filled with its colour when on."""
 
@@ -205,9 +210,11 @@ class RecipesScreen(Screen):
         }
         for key, chip in self.chips.items():
             chip.set_count(len(views[key]))
-        # Unavailable: fewest missing ingredients first ("Best match"); everything else longest first.
-        sort = SORT_OPTIONS[1] if self.view == "unavailable" else SORT_OPTIONS[0]
-        results = filter_matches(views[self.view], search=search, sort=sort)
+        results = filter_matches(views[self.view], search=search, sort=SORT_OPTIONS[0])   # longest first
+        if self.view == "unavailable":
+            # Fewest missing ingredients first; among equals, dishes that use food expiring soon.
+            # (QA 5.0: "Best match" put expiring-food dishes first even when they missed 5 things.)
+            results.sort(key=unavailable_rank)
         meal = current_meal()
         if self.view == "available":
             # Sorted by meal time: this meal's dishes first, then the next meals of the day. Python's
